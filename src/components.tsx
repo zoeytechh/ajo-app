@@ -1,0 +1,462 @@
+import React, { useEffect, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  TouchableOpacity,
+  Text,
+  View,
+  ActivityIndicator,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+  ViewStyle,
+  StyleProp,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  Image,
+} from 'react-native';
+import { Colors, FontSize, Radius, Shadow, Gradients } from './theme';
+
+// ─── Haptic Feedback Utility ───────────────────────────────────────────────
+export const feedback = (type: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning' = 'light') => {
+  try {
+    switch (type) {
+      case 'light':   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); break;
+      case 'medium':  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); break;
+      case 'heavy':   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); break;
+      case 'success': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
+      case 'error':   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); break;
+      case 'warning': Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); break;
+    }
+  } catch (e) {}
+};
+
+// ─── Bouncy Animation Wrapper ──────────────────────────────────────────────
+export const Bouncy: React.FC<{
+  children: React.ReactNode;
+  scale?: number;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  delayLongPress?: number;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+}> = ({ children, scale = 0.96, onPress, onLongPress, delayLongPress, style, disabled }) => {
+  const anim = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(anim, { toValue: scale, useNativeDriver: true, tension: 150, friction: 5 }).start();
+  };
+  const onPressOut = () => {
+    Animated.spring(anim, { toValue: 1, useNativeDriver: true, tension: 150, friction: 5 }).start();
+  };
+
+  const {
+    flexDirection, alignItems, justifyContent,
+    padding, paddingHorizontal, paddingVertical,
+    paddingLeft, paddingRight, paddingTop, paddingBottom,
+    width: w, height: h, borderRadius,
+    ...containerStyle
+  } = (style || {}) as any;
+
+  const layoutStyle = {
+    flexDirection,
+    alignItems: alignItems || 'stretch',
+    justifyContent: justifyContent || 'flex-start',
+    padding, paddingHorizontal, paddingVertical,
+    paddingLeft, paddingRight, paddingTop, paddingBottom,
+    width: w || '100%',
+    height: h || 'auto',
+    borderRadius: borderRadius || 0,
+  };
+
+  return (
+    <Pressable
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      onPress={() => {
+        if (!disabled) { feedback('light'); onPress?.(); }
+      }}
+      onLongPress={() => {
+        feedback('heavy');
+        onLongPress?.();
+      }}
+      delayLongPress={delayLongPress}
+      disabled={disabled}
+      style={[containerStyle, { width: w, height: h, borderRadius }]}
+    >
+      <Animated.View style={[{ transform: [{ scale: anim }] }, layoutStyle]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
+
+// ─── Skeleton Loader ───────────────────────────────────────────────────────
+export const Skeleton: React.FC<{ width: any; height: any; radius?: number; style?: ViewStyle }> = ({ width, height, radius = Radius.sm, style }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 800, easing: Easing.linear, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
+
+  return (
+    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: Colors.skeleton, opacity }, style]} />
+  );
+};
+
+// ─── Loading Overlay ──────────────────────────────────────────────────────
+interface LoadingOverlayProps {
+  visible: boolean;
+  message?: string;
+}
+
+export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ visible, message = 'Processing...' }) => {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.15, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ])
+      ).start();
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal transparent visible={visible} animationType="fade">
+      <View style={s.overlayBg}>
+        <View style={s.loaderCard}>
+          <Animated.View style={[s.logoBadge, { transform: [{ scale: pulse }] }]}>
+            <Text style={s.logoLetter}>A</Text>
+          </Animated.View>
+          <Text style={s.loadingText}>{message}</Text>
+          <ActivityIndicator color={Colors.primary} size="small" style={{ marginTop: 12 }} />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ─── Primary Button ────────────────────────────────────────────────────────
+interface ButtonProps {
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  variant?: 'primary' | 'outline' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  fullWidth?: boolean;
+  style?: StyleProp<ViewStyle>;
+  icon?: string;
+}
+
+export const Button: React.FC<ButtonProps> = ({
+  label, onPress, loading, disabled, variant = 'primary', size = 'lg', fullWidth = true, style, icon
+}) => {
+  const isOutline = variant === 'outline';
+  const isGhost   = variant === 'ghost';
+  const isPrimary = variant === 'primary';
+
+  const py = { sm: 10, md: 13, lg: 16 }[size];
+  const fs = { sm: FontSize.sm, md: FontSize.base, lg: FontSize.md }[size];
+
+  const textColor = isOutline || isGhost ? Colors.primary : Colors.white;
+
+  const content = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+      {loading ? (
+        <ActivityIndicator color={textColor} size="small" />
+      ) : (
+        <>
+          {icon && <Ionicons name={icon as any} size={fs + 2} color={textColor} style={{ marginRight: 8 }} />}
+          <Text style={{ color: textColor, fontSize: fs, fontWeight: '700', letterSpacing: 0.3 }}>
+            {label}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+
+  return (
+    <Bouncy onPress={disabled || loading ? undefined : onPress} style={[{ width: fullWidth ? '100%' : undefined }, style]}>
+      {isPrimary ? (
+        <LinearGradient
+          colors={disabled ? [Colors.textDisabled, Colors.textDisabled] : Gradients.primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[
+            s.btnBase,
+            { paddingVertical: py, borderRadius: Radius.full },
+            Shadow.soft(Colors.primary),
+            style,
+          ]}
+        >
+          {content}
+        </LinearGradient>
+      ) : (
+        <View style={[
+          s.btnBase,
+          {
+            paddingVertical: py,
+            borderRadius: Radius.full,
+            backgroundColor: isOutline ? Colors.white : 'transparent',
+            borderWidth: isGhost ? 0 : 1.5,
+            borderColor: isOutline ? Colors.primary : 'transparent',
+            opacity: disabled ? 0.5 : 1,
+          },
+          style,
+        ]}>
+          {content}
+        </View>
+      )}
+    </Bouncy>
+  );
+};
+
+// ─── Text Input ────────────────────────────────────────────────────────────
+interface InputProps extends TextInputProps {
+  label?: string;
+  error?: string;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  containerStyle?: ViewStyle;
+}
+
+export const Input: React.FC<InputProps> = ({
+  label, error, leftIcon, rightIcon, containerStyle, ...props
+}) => (
+  <View style={[{ marginBottom: 16 }, containerStyle]}>
+    {label && <Text style={s.inputLabel}>{label}</Text>}
+    <View style={[s.inputWrap, error ? s.inputError : s.inputNormal]}>
+      {leftIcon && <View style={s.inputIcon}>{leftIcon}</View>}
+      <TextInput
+        placeholderTextColor={Colors.textTertiary}
+        style={[s.inputField, leftIcon ? { paddingLeft: 0 } : null]}
+        {...props}
+      />
+      {rightIcon && <View style={s.inputIconRight}>{rightIcon}</View>}
+    </View>
+    {error && <Text style={s.errorText}>{error}</Text>}
+  </View>
+);
+
+// ─── Card ──────────────────────────────────────────────────────────────────
+interface CardProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
+  padded?: boolean;
+}
+
+export const Card: React.FC<CardProps> = ({ children, style, padded = true }) => (
+  <View style={[s.card, padded && { padding: 18 }, style]}>{children}</View>
+);
+
+// ─── Badge / Pill ──────────────────────────────────────────────────────────
+interface PillProps {
+  label: string;
+  color?: string;
+  bg?: string;
+  style?: ViewStyle;
+}
+
+export const Pill: React.FC<PillProps> = ({
+  label, color = Colors.primary, bg = Colors.primaryTint, style,
+}) => (
+  <View style={[{ backgroundColor: bg, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 4 }, style]}>
+    <Text style={{ color, fontSize: FontSize.xs, fontWeight: '600', letterSpacing: 0.5 }}>{label}</Text>
+  </View>
+);
+
+// ─── Divider ──────────────────────────────────────────────────────────────
+export const Divider: React.FC<{ label?: string; style?: ViewStyle }> = ({ label, style }) => (
+  <View style={[{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }, style]}>
+    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
+    {label && (
+      <Text style={{ marginHorizontal: 12, color: Colors.textSecondary, fontSize: FontSize.xs, fontWeight: '500' }}>
+        {label}
+      </Text>
+    )}
+    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
+  </View>
+);
+
+// ─── Avatar ──────────────────────────────────────────────────────────────
+interface AvatarProps {
+  initials: string;
+  size?: number;
+  color?: string;
+  imageUri?: string | null;
+}
+
+export const Avatar: React.FC<AvatarProps> = ({ initials, size = 48, color = Colors.primary, imageUri }) => {
+  if (imageUri) {
+    return (
+      <Image
+        source={{ uri: imageUri }}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: color }}
+      />
+    );
+  }
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: Colors.primaryTint, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 2, borderColor: color,
+    }}>
+      <Text style={{ color, fontWeight: '700', fontSize: size * 0.36 }}>{initials}</Text>
+    </View>
+  );
+};
+
+// ─── Star Rating ──────────────────────────────────────────────────────────
+export const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 14 }) => (
+  <View style={{ flexDirection: 'row', gap: 2 }}>
+    {[1, 2, 3, 4, 5].map((i) => (
+      <Ionicons
+        key={i}
+        name={i <= rating ? 'star' : 'star-outline'}
+        size={size}
+        color={i <= rating ? Colors.warning : Colors.textTertiary}
+      />
+    ))}
+  </View>
+);
+
+// ─── Section Header ──────────────────────────────────────────────────────
+export const SectionHeader: React.FC<{ title: string; action?: string; onAction?: () => void }> = ({
+  title, action, onAction,
+}) => (
+  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+    <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: Colors.textPrimary }}>{title}</Text>
+    {action && (
+      <TouchableOpacity onPress={onAction}>
+        <Text style={{ fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' }}>{action}</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+// ─── OTP Box ──────────────────────────────────────────────────────────────
+interface OTPBoxProps {
+  value: string;
+  focused: boolean;
+}
+
+export const OTPBox: React.FC<OTPBoxProps> = ({ value, focused }) => (
+  <View style={[s.otpBox, focused && s.otpFocused]}>
+    <Text style={s.otpText}>{value}</Text>
+  </View>
+);
+
+// ─── Styles ───────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  btnBase: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  inputLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 6,
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  inputNormal: { borderColor: Colors.border },
+  inputError:  { borderColor: Colors.error },
+  inputField: {
+    flex: 1,
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+    paddingVertical: 12,
+  },
+  inputIcon:      { marginRight: 10 },
+  inputIconRight: { marginLeft: 10 },
+  errorText: {
+    color: Colors.error,
+    fontSize: FontSize.xs,
+    marginTop: 5,
+    marginLeft: 4,
+  },
+  card: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    ...Shadow.card(Colors.black),
+  },
+  otpBox: {
+    width: 54,
+    height: 58,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpFocused: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.white,
+    ...Shadow.soft(Colors.primary),
+  },
+  otpText: {
+    fontSize: FontSize.xl,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  overlayBg: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loaderCard: {
+    backgroundColor: Colors.white,
+    padding: 30,
+    borderRadius: Radius.xl,
+    alignItems: 'center',
+    ...Shadow.strong(Colors.black),
+    width: 200,
+  },
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoLetter: {
+    color: Colors.white,
+    fontSize: FontSize.xl,
+    fontWeight: '900',
+  },
+  loadingText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.base,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+});

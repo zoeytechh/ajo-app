@@ -1,0 +1,65 @@
+import api from './api';
+import { useAuthStore, type AjoUser } from '../store/useAppStore';
+
+// ─── Payload types ────────────────────────────────────────────────────────────
+
+export interface RegisterPayload {
+  email: string;
+  phone_number: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+// ─── Auth service ─────────────────────────────────────────────────────────────
+
+export const authService = {
+  // Step 1 — creates account, sends email OTP (no token returned yet)
+  register: async (data: RegisterPayload): Promise<{ message: string }> => {
+    const res = await api.post('/api/auth/register/', data);
+    return res.data;
+  },
+
+  verifyEmail: async (email: string, code: string): Promise<{ message: string }> => {
+    const res = await api.post('/api/auth/verify-email/', { email, code });
+    return res.data;
+  },
+
+  verifyPhone: async (email: string, code: string): Promise<{ message: string }> => {
+    const res = await api.post('/api/auth/verify-phone/', { email, code });
+    return res.data;
+  },
+
+  resendOtp: async (email: string, type: 'email' | 'phone'): Promise<{ message: string }> => {
+    const res = await api.post('/api/auth/resend-otp/', { email, type });
+    return res.data;
+  },
+
+  // Returns JWT tokens + user profile; stores them in the auth store
+  login: async (data: LoginPayload): Promise<{ access: string; refresh: string; user: AjoUser }> => {
+    const res = await api.post('/api/auth/login/', data);
+    const { access, refresh, user } = res.data;
+    useAuthStore.getState().setAuth(user, access, refresh);
+    return res.data;
+  },
+
+  getMe: async (): Promise<AjoUser> => {
+    const res = await api.get('/api/auth/me/');
+    useAuthStore.getState().updateUser(res.data);
+    return res.data;
+  },
+
+  updateFcmToken: async (fcm_token: string): Promise<AjoUser> => {
+    const res = await api.patch('/api/auth/me/', { fcm_token });
+    return res.data;
+  },
+
+  logout: () => {
+    useAuthStore.getState().logout();
+  },
+};

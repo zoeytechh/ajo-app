@@ -1,0 +1,41 @@
+> Android Bundled 135ms node_modules\expo-router\entry.js (1 module)                                                                
+    LOG  🔗 API Base URL detected: http://10.162.164.27:5000/api/v1                                                                  
+   › Opening on iOS...                                                                                                               
+   √ Xcode must be fully installed before you can continue. If this message is still occurring after installing Xcode, you may need  
+   to finish the installation of the developer tools by running: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.  
+   Continue to the App Store? ... no                                                                                                 
+                                                                                                                                     
+                                                                                                                                     
+                                                                                                                                     
+      what is appening? explian                                                                                                      
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+✦ This message is telling you two different things: one about your Android setup and one about your iOS setup.
+
+  1. Android is Working
+  Android Bundled 135ms...
+  This means the app is successfully prepared for Android. If you have an Android emulator open or a phone plugged in, it is ready to
+  go.
+
+  2. The iOS/Xcode Error (What is happening)
+  Xcode must be fully installed before you can continue.
+  You (or the system) tried to open the app on an iOS Simulator. 
+   * If you are on a Windows PC: You cannot run the iOS simulator. Xcode only works on Apple computers (Macs). To see the app on an
+     iPhone from Windows, you must use the Expo Go app on a physical iPhone and scan the QR code.
+   * If you are on a Mac: It means your Xcode installation is either missing, outdated, or the "Command Line Tools" aren't linked
+     correctly.
+
+  ---
+
+  ⚠️ Important Note on Code Errors
+  While looking at your logs, I noticed that I accidentally introduced some web-style tags (<div>) in the last update, which will
+  cause the app to crash on your phone/emulator once it starts. 
+
+  I need to fix those immediately so you can actually see the new SOS animation. Shall I go ahead and swap those <div> tags for the
+  correct React Native <View> tags?
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+ > yes                                   
+
+
+  > the sos button is the next thing to work on. take a look at my prd pdf to kwhow exactly how to functionalize the sos button. I    
+   knwo that i is not sopposed to be accidentally triggerd so it will need somthing like long press. But chevk the prd pdf and       
+   know what exactly to do. Before you make any changes, explain to me and tell me what is to be done  

@@ -5,44 +5,55 @@ import {
   Platform, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize, Radius } from './theme';
+import { FontSize, Radius } from './theme';
 import { Button, Input, Divider, OTPBox, LoadingOverlay, Bouncy, feedback } from './components';
 import Svg, { Path } from 'react-native-svg';
 import { authService } from './services/authService';
 import { useAuthStore } from './store/useAppStore';
+import { useTheme } from './hooks/useTheme';
 
 // ─── Logo Mark ────────────────────────────────────────────────────────────────
-const SmallLogo = () => (
-  <View style={{ alignItems: 'center', marginBottom: 12 }}>
-    <Svg width={56} height={60} viewBox="0 0 220 240">
-      <Path
-        d="M110 12 L196 42 L196 118 C196 162 154 195 110 215 C66 195 24 162 24 118 L24 42 Z"
-        fill={Colors.primaryTint}
-        stroke={Colors.primary}
-        strokeWidth="10"
-      />
-      <Path
-        d="M84 110 L102 128 L138 92"
-        stroke={Colors.primary}
-        strokeWidth="10"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  </View>
-);
+const SmallLogo = () => {
+  const { colors } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', marginBottom: 12 }}>
+      <Svg width={56} height={60} viewBox="0 0 220 240">
+        <Path
+          d="M110 12 L196 42 L196 118 C196 162 154 195 110 215 C66 195 24 162 24 118 L24 42 Z"
+          fill={colors.primaryTint}
+          stroke={colors.primary}
+          strokeWidth="10"
+        />
+        <Path
+          d="M84 110 L102 128 L138 92"
+          stroke={colors.primary}
+          strokeWidth="10"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </View>
+  );
+};
 
 // ─── Auth Header ──────────────────────────────────────────────────────────────
 const AuthHeader: React.FC<{ title: string; subtitle: string; showLogo?: boolean }> = ({
   title, subtitle, showLogo = true,
-}) => (
-  <View style={s.authHeader}>
-    {showLogo && <SmallLogo />}
-    <Text style={s.authTitle}>{title}</Text>
-    <Text style={s.authSubtitle}>{subtitle}</Text>
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View style={layout.authHeader}>
+      {showLogo && <SmallLogo />}
+      <Text style={{ fontSize: FontSize.xxl, fontWeight: '800', color: colors.primary, textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>
+        {title}
+      </Text>
+      <Text style={{ fontSize: FontSize.base, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+        {subtitle}
+      </Text>
+    </View>
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REGISTER SCREEN
@@ -53,6 +64,7 @@ interface RegisterProps {
 }
 
 export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) => {
+  const { colors, isDark } = useTheme();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -116,62 +128,67 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <LoadingOverlay visible={loading} message="Creating your account..." />
-      <ScrollView style={s.screen} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={layout.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <AuthHeader title="Create account" subtitle="Join Ajo — your circle, your record." />
 
         {serverError ? (
-          <View style={s.errorBanner}>
-            <Text style={s.errorBannerText}>⚠️  {serverError}</Text>
+          <View style={[layout.errorBanner, { backgroundColor: colors.errorLight, borderLeftColor: colors.error }]}>
+            <Text style={{ color: colors.error, fontSize: FontSize.sm, fontWeight: '500' }}>⚠️  {serverError}</Text>
           </View>
         ) : null}
 
         <Input
           label="Full Name" placeholder="Ada Okonkwo" value={form.name}
           onChangeText={(v) => setForm({ ...form, name: v })} error={errors.name}
-          autoCapitalize="words" leftIcon={<Ionicons name="person-outline" size={18} color={Colors.primary} />}
+          autoCapitalize="words" leftIcon={<Ionicons name="person-outline" size={18} color={colors.primary} />}
         />
         <Input
           label="Email Address" placeholder="ada@email.com" value={form.email}
           onChangeText={(v) => setForm({ ...form, email: v })} error={errors.email}
           keyboardType="email-address" autoCapitalize="none"
-          leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.primary} />}
+          leftIcon={<Ionicons name="mail-outline" size={18} color={colors.primary} />}
         />
         <Input
           label="Phone Number" placeholder="+234 800 000 0000" value={form.phone}
           onChangeText={(v) => setForm({ ...form, phone: v })} error={errors.phone}
-          keyboardType="phone-pad" leftIcon={<Ionicons name="call-outline" size={18} color={Colors.primary} />}
+          keyboardType="phone-pad" leftIcon={<Ionicons name="call-outline" size={18} color={colors.primary} />}
         />
         <Input
           label="Password" placeholder="Minimum 8 characters" value={form.password}
           onChangeText={(v) => setForm({ ...form, password: v })} error={errors.password}
-          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />}
+          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={colors.primary} />}
           rightIcon={
             <TouchableOpacity onPress={() => { feedback('light'); setShowPass(!showPass); }}>
-              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.textSecondary} />
+              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           }
         />
         <Input
           label="Confirm Password" placeholder="Repeat your password" value={form.confirm}
           onChangeText={(v) => setForm({ ...form, confirm: v })} error={errors.confirm}
-          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />}
+          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={colors.primary} />}
         />
 
-        <Text style={s.terms}>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 20, marginTop: 4 }}>
           By creating an account, you agree to Ajo's{' '}
-          <Text style={s.link}>Terms of Service</Text> and{' '}
-          <Text style={s.link}>Privacy Policy</Text>.
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>Terms of Service</Text> and{' '}
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>Privacy Policy</Text>.
         </Text>
 
         <Button label="Create Account" onPress={handleRegister} loading={loading} />
 
         <Divider label="or" />
 
-        <Bouncy onPress={onLogin} style={s.switchRow}>
-          <Text style={s.switchText}>
+        <Bouncy onPress={onLogin} style={layout.switchRow}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' }}>
             Already have an account?{' '}
-            <Text style={s.switchAction}>Log in</Text>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>Log in</Text>
           </Text>
         </Bouncy>
       </ScrollView>
@@ -189,6 +206,7 @@ interface LoginProps {
 }
 
 export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onForgot }) => {
+  const { colors, isDark } = useTheme();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -219,13 +237,18 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <LoadingOverlay visible={loading} message="Logging you in..." />
-      <ScrollView style={s.screen} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={layout.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
         <AuthHeader title="Welcome back" subtitle="Log in to your Ajo account." />
 
         {serverError ? (
-          <View style={s.errorBanner}>
-            <Text style={s.errorBannerText}>⚠️  {serverError}</Text>
+          <View style={[layout.errorBanner, { backgroundColor: colors.errorLight, borderLeftColor: colors.error }]}>
+            <Text style={{ color: colors.error, fontSize: FontSize.sm, fontWeight: '500' }}>⚠️  {serverError}</Text>
           </View>
         ) : null}
 
@@ -233,31 +256,31 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
           label="Email Address" placeholder="ada@email.com" value={form.email}
           onChangeText={(v) => setForm({ ...form, email: v })}
           keyboardType="email-address" autoCapitalize="none"
-          leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.primary} />}
+          leftIcon={<Ionicons name="mail-outline" size={18} color={colors.primary} />}
         />
         <Input
           label="Password" placeholder="Your password" value={form.password}
           onChangeText={(v) => setForm({ ...form, password: v })}
-          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />}
+          secureTextEntry={!showPass} leftIcon={<Ionicons name="lock-closed-outline" size={18} color={colors.primary} />}
           rightIcon={
             <TouchableOpacity onPress={() => { feedback('light'); setShowPass(!showPass); }}>
-              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.textSecondary} />
+              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           }
         />
 
         <Bouncy onPress={onForgot} style={{ alignSelf: 'flex-end', marginTop: -8, marginBottom: 20 }}>
-          <Text style={s.link}>Forgot password?</Text>
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>Forgot password?</Text>
         </Bouncy>
 
         <Button label="Log In" onPress={handleLogin} loading={loading} />
 
         <Divider label="or" />
 
-        <Bouncy onPress={onRegister} style={s.switchRow}>
-          <Text style={s.switchText}>
+        <Bouncy onPress={onRegister} style={layout.switchRow}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' }}>
             Don't have an account?{' '}
-            <Text style={s.switchAction}>Sign up</Text>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>Sign up</Text>
           </Text>
         </Bouncy>
       </ScrollView>
@@ -288,6 +311,7 @@ const maskPhone = (phone: string) => {
 };
 
 export const OTPScreen: React.FC<OTPProps> = ({ email, phone_number, onSuccess, onBack }) => {
+  const { colors, isDark } = useTheme();
   const user = useAuthStore((state) => state.user);
   const resolvedEmail = email || user?.email || '';
   const resolvedPhone = phone_number || user?.phone_number || '';
@@ -387,82 +411,101 @@ export const OTPScreen: React.FC<OTPProps> = ({ email, phone_number, onSuccess, 
     : (resolvedPhone ? maskPhone(resolvedPhone) : 'your WhatsApp number');
 
   return (
-    <View style={s.screen}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <LoadingOverlay visible={loading || switching} message={switching ? 'Sending code…' : 'Verifying…'} />
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-      <Bouncy onPress={onBack} style={s.backBtn}>
+      <Bouncy onPress={onBack} style={layout.backBtn}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-          <Text style={[s.backText, { marginLeft: 4 }]}>Back</Text>
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontSize: FontSize.base, fontWeight: '600', marginLeft: 4 }}>Back</Text>
         </View>
       </Bouncy>
 
       <ScrollView
-        style={s.screen}
-        contentContainerStyle={[s.scrollContent, { paddingTop: 88 }]}
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[layout.scrollContent, { paddingTop: 88 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <AuthHeader title="Verify your account" subtitle="Choose how you want to receive your code." />
 
         {/* ── Channel toggle ── */}
-        <View style={s.channelRow}>
+        <View style={layout.channelRow}>
           <Bouncy
             onPress={() => handleChannelChange('email')}
-            style={[s.channelBtn, channel === 'email' && s.channelBtnActive]}
+            style={[
+              layout.channelBtn,
+              {
+                borderColor: channel === 'email' ? colors.primary : colors.border,
+                backgroundColor: channel === 'email' ? colors.primary : colors.surface,
+              },
+            ]}
             disabled={switching}
           >
             <Ionicons
               name="mail-outline"
               size={18}
-              color={channel === 'email' ? Colors.white : Colors.textSecondary}
+              color={channel === 'email' ? colors.white : colors.textSecondary}
             />
-            <Text style={[s.channelLabel, channel === 'email' && s.channelLabelActive]}>Email</Text>
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: channel === 'email' ? colors.white : colors.textSecondary }}>
+              Email
+            </Text>
           </Bouncy>
 
           <Bouncy
             onPress={() => handleChannelChange('whatsapp')}
-            style={[s.channelBtn, channel === 'whatsapp' && s.channelBtnActive, !resolvedPhone && s.channelBtnDisabled]}
+            style={[
+              layout.channelBtn,
+              {
+                borderColor: channel === 'whatsapp' ? colors.primary : colors.border,
+                backgroundColor: channel === 'whatsapp' ? colors.primary : colors.surface,
+                opacity: !resolvedPhone ? 0.45 : 1,
+              },
+            ]}
             disabled={switching || !resolvedPhone}
           >
             <Ionicons
               name="logo-whatsapp"
               size={18}
-              color={channel === 'whatsapp' ? Colors.white : !resolvedPhone ? Colors.textDisabled : Colors.textSecondary}
+              color={channel === 'whatsapp' ? colors.white : !resolvedPhone ? colors.textDisabled : colors.textSecondary}
             />
-            <Text style={[s.channelLabel, channel === 'whatsapp' && s.channelLabelActive, !resolvedPhone && s.channelLabelDisabled]}>
+            <Text style={{
+              fontSize: FontSize.sm,
+              fontWeight: '600',
+              color: channel === 'whatsapp' ? colors.white : !resolvedPhone ? colors.textDisabled : colors.textSecondary,
+            }}>
               WhatsApp
             </Text>
           </Bouncy>
         </View>
 
         {/* ── Sent-to label ── */}
-        <View style={s.sentToRow}>
+        <View style={layout.sentToRow}>
           <Ionicons
             name={channel === 'email' ? 'mail' : 'logo-whatsapp'}
             size={15}
-            color={Colors.textSecondary}
+            color={colors.textSecondary}
           />
-          <Text style={s.sentToText}>
-            {'  '}Code sent to <Text style={s.sentToContact}>{contactDisplay}</Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>
+            {'  '}Code sent to <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{contactDisplay}</Text>
           </Text>
         </View>
 
         {error ? (
-          <View style={s.errorBanner}>
-            <Text style={s.errorBannerText}>⚠️  {error}</Text>
+          <View style={[layout.errorBanner, { backgroundColor: colors.errorLight, borderLeftColor: colors.error }]}>
+            <Text style={{ color: colors.error, fontSize: FontSize.sm, fontWeight: '500' }}>⚠️  {error}</Text>
           </View>
         ) : null}
 
         {/* ── OTP boxes ── */}
-        <View style={s.otpRow}>
+        <View style={layout.otpRow}>
           {otp.map((digit, idx) => (
             <View key={idx} style={{ position: 'relative' }}>
               <OTPBox value={digit} focused={focusIdx === idx} />
               <TextInput
                 ref={(r) => { inputs.current[idx] = r; }}
-                style={s.hiddenInput} value={digit}
+                style={layout.hiddenInput} value={digit}
                 onChangeText={(v) => handleChange(v, idx)}
                 onFocus={() => { feedback('light'); setFocusIdx(idx); }}
                 keyboardType="numeric" maxLength={1} caretHidden
@@ -479,11 +522,11 @@ export const OTPScreen: React.FC<OTPProps> = ({ email, phone_number, onSuccess, 
           style={{ marginTop: 32, marginBottom: 20 }}
         />
 
-        <Bouncy onPress={handleResend} disabled={timer > 0} style={s.switchRow}>
-          <Text style={s.switchText}>
+        <Bouncy onPress={handleResend} disabled={timer > 0} style={layout.switchRow}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' }}>
             {timer > 0
               ? `Resend code in 0:${timer.toString().padStart(2, '0')}`
-              : <Text style={s.switchAction}>Resend code</Text>}
+              : <Text style={{ color: colors.primary, fontWeight: '700' }}>Resend code</Text>}
           </Text>
         </Bouncy>
       </ScrollView>
@@ -500,6 +543,7 @@ interface ForgotPasswordProps {
 }
 
 export const ForgotPasswordScreen: React.FC<ForgotPasswordProps> = ({ onBack }) => {
+  const { colors, isDark } = useTheme();
   const [email, setEmail]   = useState('');
   const [sent, setSent]     = useState(false);
   const [loading, setLoading] = useState(false);
@@ -524,12 +568,13 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordProps> = ({ onBack }) 
   };
 
   return (
-    <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <TouchableOpacity style={s.backBtn} onPress={onBack}>
-        <Text style={s.backText}>← Back</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <TouchableOpacity style={layout.backBtn} onPress={onBack}>
+        <Text style={{ color: colors.primary, fontSize: FontSize.base, fontWeight: '600' }}>← Back</Text>
       </TouchableOpacity>
       <ScrollView
-        contentContainerStyle={s.scrollContent}
+        contentContainerStyle={layout.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -545,8 +590,8 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordProps> = ({ onBack }) 
         {!sent ? (
           <>
             {!!error && (
-              <View style={s.errorBanner}>
-                <Text style={s.errorBannerText}>{error}</Text>
+              <View style={[layout.errorBanner, { backgroundColor: colors.errorLight, borderLeftColor: colors.error }]}>
+                <Text style={{ color: colors.error, fontSize: FontSize.sm, fontWeight: '500' }}>{error}</Text>
               </View>
             )}
             <Input
@@ -556,13 +601,13 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordProps> = ({ onBack }) 
               keyboardType="email-address"
               autoCapitalize="none"
               placeholder="you@example.com"
-              leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.textDisabled} />}
+              leftIcon={<Ionicons name="mail-outline" size={18} color={colors.textDisabled} />}
             />
             <Button label="Send Code" onPress={handleSubmit} loading={loading} style={{ marginTop: 8 }} />
           </>
         ) : (
           <View style={{ alignItems: 'center', paddingTop: 12 }}>
-            <Ionicons name="checkmark-circle" size={56} color={Colors.success} />
+            <Ionicons name="checkmark-circle" size={56} color={colors.success} />
             <Button label="Back to Login" onPress={onBack} variant="outline" style={{ marginTop: 28 }} />
           </View>
         )}
@@ -572,31 +617,17 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordProps> = ({ onBack }) 
   );
 };
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  screen:        { flex: 1, backgroundColor: Colors.white },
+// ─── Layout-only StyleSheet (no color values) ─────────────────────────────────
+const layout = StyleSheet.create({
   scrollContent: { paddingHorizontal: 24, paddingBottom: 48, paddingTop: 24 },
   authHeader:    { alignItems: 'center', marginBottom: 28, paddingTop: 12 },
-  authTitle:     { fontSize: FontSize.xxl, fontWeight: '800', color: Colors.primary, textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 },
-  authSubtitle:  { fontSize: FontSize.base, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  terms:         { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 20, marginTop: 4 },
-  link:          { color: Colors.primary, fontWeight: '600' },
   switchRow:     { alignItems: 'center', marginTop: 8 },
-  switchText:    { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-  switchAction:  { color: Colors.primary, fontWeight: '700' },
-  errorBanner:     { backgroundColor: Colors.errorLight, borderRadius: Radius.md, padding: 14, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: Colors.error },
-  errorBannerText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: '500' },
-  backBtn:  { position: 'absolute', top: 52, left: 20, zIndex: 10, paddingVertical: 8, paddingHorizontal: 4 },
-  backText: { color: Colors.primary, fontSize: FontSize.base, fontWeight: '600' },
-  otpRow:      { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginTop: 8 },
-  hiddenInput: { position: 'absolute', opacity: 0, width: 54, height: 58 },
-  // Channel toggle
-  channelRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  channelBtn: {
+  errorBanner:   { borderRadius: Radius.md, padding: 14, marginBottom: 16, borderLeftWidth: 3 },
+  backBtn:       { position: 'absolute', top: 52, left: 20, zIndex: 10, paddingVertical: 8, paddingHorizontal: 4 },
+  otpRow:        { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, marginTop: 8 },
+  hiddenInput:   { position: 'absolute', opacity: 0, width: 54, height: 58 },
+  channelRow:    { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  channelBtn:    {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -605,34 +636,6 @@ const s = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: Radius.md,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
   },
-  channelBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  channelBtnDisabled: {
-    opacity: 0.45,
-  },
-  channelLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  channelLabelActive: {
-    color: Colors.white,
-  },
-  channelLabelDisabled: {
-    color: Colors.textDisabled,
-  },
-  // Sent-to
-  sentToRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  sentToText:    { fontSize: FontSize.sm, color: Colors.textSecondary },
-  sentToContact: { fontWeight: '700', color: Colors.textPrimary },
+  sentToRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
 });

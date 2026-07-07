@@ -18,7 +18,9 @@ import {
   Pressable,
   Image,
 } from 'react-native';
-import { Colors, FontSize, Radius, Shadow, Gradients } from './theme';
+import { FontSize, Radius, Shadow } from './theme';
+import { useTheme } from './hooks/useTheme';
+import { AjoLoader } from './AjoLoader';
 
 // ─── Haptic Feedback Utility ───────────────────────────────────────────────
 export const feedback = (type: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning' = 'light') => {
@@ -76,13 +78,8 @@ export const Bouncy: React.FC<{
     <Pressable
       onPressIn={onPressIn}
       onPressOut={onPressOut}
-      onPress={() => {
-        if (!disabled) { feedback('light'); onPress?.(); }
-      }}
-      onLongPress={() => {
-        feedback('heavy');
-        onLongPress?.();
-      }}
+      onPress={() => { if (!disabled) { feedback('light'); onPress?.(); } }}
+      onLongPress={() => { feedback('heavy'); onLongPress?.(); }}
       delayLongPress={delayLongPress}
       disabled={disabled}
       style={[containerStyle, { width: w, height: h, borderRadius }]}
@@ -95,7 +92,10 @@ export const Bouncy: React.FC<{
 };
 
 // ─── Skeleton Loader ───────────────────────────────────────────────────────
-export const Skeleton: React.FC<{ width: any; height: any; radius?: number; style?: ViewStyle }> = ({ width, height, radius = Radius.sm, style }) => {
+export const Skeleton: React.FC<{ width: any; height: any; radius?: number; style?: ViewStyle }> = ({
+  width, height, radius = Radius.sm, style,
+}) => {
+  const { colors } = useTheme();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -110,7 +110,9 @@ export const Skeleton: React.FC<{ width: any; height: any; radius?: number; styl
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
 
   return (
-    <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: Colors.skeleton, opacity }, style]} />
+    <Animated.View
+      style={[{ width, height, borderRadius: radius, backgroundColor: colors.skeleton, opacity }, style]}
+    />
   );
 };
 
@@ -121,30 +123,18 @@ interface LoadingOverlayProps {
 }
 
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ visible, message = 'Processing...' }) => {
-  const pulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.15, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ])
-      ).start();
-    }
-  }, [visible]);
+  const { colors } = useTheme();
 
   if (!visible) return null;
 
   return (
     <Modal transparent visible={visible} animationType="fade">
-      <View style={s.overlayBg}>
-        <View style={s.loaderCard}>
-          <Animated.View style={[s.logoBadge, { transform: [{ scale: pulse }] }]}>
-            <Text style={s.logoLetter}>A</Text>
-          </Animated.View>
-          <Text style={s.loadingText}>{message}</Text>
-          <ActivityIndicator color={Colors.primary} size="small" style={{ marginTop: 12 }} />
+      <View style={[s.overlayBg, { backgroundColor: colors.overlay }]}>
+        <View style={[s.loaderCard, { backgroundColor: colors.surface, ...Shadow.strong(colors.black) }]}>
+          <AjoLoader size={72} />
+          <Text style={[s.loadingText, { color: colors.textPrimary, marginTop: 20 }]}>
+            {message}
+          </Text>
         </View>
       </View>
     </Modal>
@@ -165,8 +155,9 @@ interface ButtonProps {
 }
 
 export const Button: React.FC<ButtonProps> = ({
-  label, onPress, loading, disabled, variant = 'primary', size = 'lg', fullWidth = true, style, icon
+  label, onPress, loading, disabled, variant = 'primary', size = 'lg', fullWidth = true, style, icon,
 }) => {
+  const { colors, isDark } = useTheme();
   const isOutline = variant === 'outline';
   const isGhost   = variant === 'ghost';
   const isPrimary = variant === 'primary';
@@ -174,7 +165,10 @@ export const Button: React.FC<ButtonProps> = ({
   const py = { sm: 10, md: 13, lg: 16 }[size];
   const fs = { sm: FontSize.sm, md: FontSize.base, lg: FontSize.md }[size];
 
-  const textColor = isOutline || isGhost ? Colors.primary : Colors.white;
+  const textColor = isOutline || isGhost ? colors.primary : colors.white;
+  const gradient  = disabled
+    ? [colors.textDisabled, colors.textDisabled] as const
+    : [colors.primary, colors.primaryDark] as const;
 
   const content = (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
@@ -195,15 +189,10 @@ export const Button: React.FC<ButtonProps> = ({
     <Bouncy onPress={disabled || loading ? undefined : onPress} style={[{ width: fullWidth ? '100%' : undefined }, style]}>
       {isPrimary ? (
         <LinearGradient
-          colors={disabled ? [Colors.textDisabled, Colors.textDisabled] : Gradients.primary}
+          colors={gradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[
-            s.btnBase,
-            { paddingVertical: py, borderRadius: Radius.full },
-            Shadow.soft(Colors.primary),
-            style,
-          ]}
+          style={[s.btnBase, { paddingVertical: py, borderRadius: Radius.full }, Shadow.soft(colors.primary)]}
         >
           {content}
         </LinearGradient>
@@ -213,12 +202,11 @@ export const Button: React.FC<ButtonProps> = ({
           {
             paddingVertical: py,
             borderRadius: Radius.full,
-            backgroundColor: isOutline ? Colors.white : 'transparent',
+            backgroundColor: isOutline ? (isDark ? colors.surface : colors.white) : 'transparent',
             borderWidth: isGhost ? 0 : 1.5,
-            borderColor: isOutline ? Colors.primary : 'transparent',
+            borderColor: isOutline ? colors.primary : 'transparent',
             opacity: disabled ? 0.5 : 1,
           },
-          style,
         ]}>
           {content}
         </View>
@@ -238,21 +226,38 @@ interface InputProps extends TextInputProps {
 
 export const Input: React.FC<InputProps> = ({
   label, error, leftIcon, rightIcon, containerStyle, ...props
-}) => (
-  <View style={[{ marginBottom: 16 }, containerStyle]}>
-    {label && <Text style={s.inputLabel}>{label}</Text>}
-    <View style={[s.inputWrap, error ? s.inputError : s.inputNormal]}>
-      {leftIcon && <View style={s.inputIcon}>{leftIcon}</View>}
-      <TextInput
-        placeholderTextColor={Colors.textTertiary}
-        style={[s.inputField, leftIcon ? { paddingLeft: 0 } : null]}
-        {...props}
-      />
-      {rightIcon && <View style={s.inputIconRight}>{rightIcon}</View>}
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[{ marginBottom: 16 }, containerStyle]}>
+      {label && (
+        <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 }}>
+          {label}
+        </Text>
+      )}
+      <View style={[
+        s.inputWrap,
+        {
+          backgroundColor: colors.surfaceInput,
+          borderColor: error ? colors.error : colors.border,
+        },
+      ]}>
+        {leftIcon && <View style={s.inputIcon}>{leftIcon}</View>}
+        <TextInput
+          placeholderTextColor={colors.textTertiary}
+          style={[s.inputField, { color: colors.textPrimary }, leftIcon ? { paddingLeft: 0 } : null]}
+          {...props}
+        />
+        {rightIcon && <View style={s.inputIconRight}>{rightIcon}</View>}
+      </View>
+      {error && (
+        <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 5, marginLeft: 4 }}>
+          {error}
+        </Text>
+      )}
     </View>
-    {error && <Text style={s.errorText}>{error}</Text>}
-  </View>
-);
+  );
+};
 
 // ─── Card ──────────────────────────────────────────────────────────────────
 interface CardProps {
@@ -261,9 +266,19 @@ interface CardProps {
   padded?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style, padded = true }) => (
-  <View style={[s.card, padded && { padding: 18 }, style]}>{children}</View>
-);
+export const Card: React.FC<CardProps> = ({ children, style, padded = true }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[
+      s.cardBase,
+      { backgroundColor: colors.surface, ...Shadow.card(colors.black) },
+      padded && { padding: 18 },
+      style,
+    ]}>
+      {children}
+    </View>
+  );
+};
 
 // ─── Badge / Pill ──────────────────────────────────────────────────────────
 interface PillProps {
@@ -273,26 +288,35 @@ interface PillProps {
   style?: ViewStyle;
 }
 
-export const Pill: React.FC<PillProps> = ({
-  label, color = Colors.primary, bg = Colors.primaryTint, style,
-}) => (
-  <View style={[{ backgroundColor: bg, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 4 }, style]}>
-    <Text style={{ color, fontSize: FontSize.xs, fontWeight: '600', letterSpacing: 0.5 }}>{label}</Text>
-  </View>
-);
-
-// ─── Divider ──────────────────────────────────────────────────────────────
-export const Divider: React.FC<{ label?: string; style?: ViewStyle }> = ({ label, style }) => (
-  <View style={[{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }, style]}>
-    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
-    {label && (
-      <Text style={{ marginHorizontal: 12, color: Colors.textSecondary, fontSize: FontSize.xs, fontWeight: '500' }}>
+export const Pill: React.FC<PillProps> = ({ label, color, bg, style }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[
+      { backgroundColor: bg ?? colors.primaryTint, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 4 },
+      style,
+    ]}>
+      <Text style={{ color: color ?? colors.primary, fontSize: FontSize.xs, fontWeight: '600', letterSpacing: 0.5 }}>
         {label}
       </Text>
-    )}
-    <View style={{ flex: 1, height: 1, backgroundColor: Colors.border }} />
-  </View>
-);
+    </View>
+  );
+};
+
+// ─── Divider ──────────────────────────────────────────────────────────────
+export const Divider: React.FC<{ label?: string; style?: ViewStyle }> = ({ label, style }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', marginVertical: 20 }, style]}>
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+      {label && (
+        <Text style={{ marginHorizontal: 12, color: colors.textSecondary, fontSize: FontSize.xs, fontWeight: '500' }}>
+          {label}
+        </Text>
+      )}
+      <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+    </View>
+  );
+};
 
 // ─── Avatar ──────────────────────────────────────────────────────────────
 interface AvatarProps {
@@ -302,53 +326,61 @@ interface AvatarProps {
   imageUri?: string | null;
 }
 
-export const Avatar: React.FC<AvatarProps> = ({ initials, size = 48, color = Colors.primary, imageUri }) => {
+export const Avatar: React.FC<AvatarProps> = ({ initials, size = 48, color, imageUri }) => {
+  const { colors } = useTheme();
+  const borderColor = color ?? colors.primary;
   if (imageUri) {
     return (
       <Image
         source={{ uri: imageUri }}
-        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: color }}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor }}
       />
     );
   }
   return (
     <View style={{
       width: size, height: size, borderRadius: size / 2,
-      backgroundColor: Colors.primaryTint, alignItems: 'center', justifyContent: 'center',
-      borderWidth: 2, borderColor: color,
+      backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 2, borderColor,
     }}>
-      <Text style={{ color, fontWeight: '700', fontSize: size * 0.36 }}>{initials}</Text>
+      <Text style={{ color: borderColor, fontWeight: '700', fontSize: size * 0.36 }}>{initials}</Text>
     </View>
   );
 };
 
 // ─── Star Rating ──────────────────────────────────────────────────────────
-export const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 14 }) => (
-  <View style={{ flexDirection: 'row', gap: 2 }}>
-    {[1, 2, 3, 4, 5].map((i) => (
-      <Ionicons
-        key={i}
-        name={i <= rating ? 'star' : 'star-outline'}
-        size={size}
-        color={i <= rating ? Colors.warning : Colors.textTertiary}
-      />
-    ))}
-  </View>
-);
+export const StarRating: React.FC<{ rating: number; size?: number }> = ({ rating, size = 14 }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Ionicons
+          key={i}
+          name={i <= rating ? 'star' : 'star-outline'}
+          size={size}
+          color={i <= rating ? colors.warning : colors.textTertiary}
+        />
+      ))}
+    </View>
+  );
+};
 
 // ─── Section Header ──────────────────────────────────────────────────────
 export const SectionHeader: React.FC<{ title: string; action?: string; onAction?: () => void }> = ({
   title, action, onAction,
-}) => (
-  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-    <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: Colors.textPrimary }}>{title}</Text>
-    {action && (
-      <TouchableOpacity onPress={onAction}>
-        <Text style={{ fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' }}>{action}</Text>
-      </TouchableOpacity>
-    )}
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }}>{title}</Text>
+      {action && (
+        <TouchableOpacity onPress={onAction}>
+          <Text style={{ fontSize: FontSize.sm, color: colors.primary, fontWeight: '600' }}>{action}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
 
 // ─── OTP Box ──────────────────────────────────────────────────────────────
 interface OTPBoxProps {
@@ -356,105 +388,67 @@ interface OTPBoxProps {
   focused: boolean;
 }
 
-export const OTPBox: React.FC<OTPBoxProps> = ({ value, focused }) => (
-  <View style={[s.otpBox, focused && s.otpFocused]}>
-    <Text style={s.otpText}>{value}</Text>
-  </View>
-);
+export const OTPBox: React.FC<OTPBoxProps> = ({ value, focused }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[
+      s.otpBox,
+      {
+        borderColor: focused ? colors.primary : colors.border,
+        backgroundColor: focused ? colors.surface : colors.surfaceInput,
+        ...(focused ? Shadow.soft(colors.primary) : {}),
+      },
+    ]}>
+      <Text style={{ fontSize: FontSize.xl, fontWeight: '700', color: colors.primary }}>{value}</Text>
+    </View>
+  );
+};
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+// ─── Layout-only StyleSheet (no colors) ───────────────────────────────────
 const s = StyleSheet.create({
   btnBase: {
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
   },
-  inputLabel: {
-    fontSize: FontSize.sm,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
     borderRadius: Radius.md,
-    backgroundColor: Colors.white,
     paddingHorizontal: 14,
     minHeight: 52,
   },
-  inputNormal: { borderColor: Colors.border },
-  inputError:  { borderColor: Colors.error },
   inputField: {
     flex: 1,
     fontSize: FontSize.base,
-    color: Colors.textPrimary,
     paddingVertical: 12,
   },
   inputIcon:      { marginRight: 10 },
   inputIconRight: { marginLeft: 10 },
-  errorText: {
-    color: Colors.error,
-    fontSize: FontSize.xs,
-    marginTop: 5,
-    marginLeft: 4,
-  },
-  card: {
-    backgroundColor: Colors.white,
+  cardBase: {
     borderRadius: Radius.lg,
-    ...Shadow.card(Colors.black),
   },
   otpBox: {
     width: 54,
     height: 58,
     borderRadius: Radius.md,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceInput,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  otpFocused: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.white,
-    ...Shadow.soft(Colors.primary),
-  },
-  otpText: {
-    fontSize: FontSize.xl,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
   overlayBg: {
     flex: 1,
-    backgroundColor: Colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loaderCard: {
-    backgroundColor: Colors.white,
-    padding: 30,
+    padding: 32,
     borderRadius: Radius.xl,
     alignItems: 'center',
-    ...Shadow.strong(Colors.black),
     width: 200,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  logoLetter: {
-    color: Colors.white,
-    fontSize: FontSize.xl,
-    fontWeight: '900',
-  },
   loadingText: {
-    color: Colors.textPrimary,
     fontSize: FontSize.base,
     fontWeight: '700',
     letterSpacing: 0.5,

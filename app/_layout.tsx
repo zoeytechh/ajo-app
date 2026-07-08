@@ -146,7 +146,7 @@ function AppShell() {
   }, []);
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AuthGuard />
       <Stack
@@ -158,7 +158,7 @@ function AppShell() {
         <Stack.Screen name="index" />
       </Stack>
       <BottomTabBar />
-    </>
+    </View>
   );
 }
 

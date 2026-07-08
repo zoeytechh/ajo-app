@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Animated, StatusBar, Dimensions, Easing, useColorScheme } from 'react-native';
-import AjoLogo from '../src/components/AjoLogo';
+import AjoLogo from '../assets/ajo-logo.svg';
 
 const { height } = Dimensions.get('window');
 

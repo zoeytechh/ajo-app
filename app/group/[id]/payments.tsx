@@ -10,7 +10,7 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { useAuthStore } from '../../../src/store/useAppStore';
 import { groupService, type Payment } from '../../../src/services/groupService';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
-import { Pill, Skeleton, LoadingOverlay, feedback, Button } from '../../../src/components';
+import { Pill, Skeleton, LoadingOverlay, feedback } from '../../../src/components';
 
 // ─── Status colours ───────────────────────────────────────────────────────────
 const statusColor = (status: string, colors: any) => ({
@@ -329,29 +329,22 @@ export default function PaymentsRoute() {
       </View>
 
       {/* Filter tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={lay.filterRow}
-      >
+      <View style={[lay.filterRow, { borderBottomColor: colors.border }]}>
         {FILTERS.map((f) => {
           const active = filter === f.key;
           return (
             <TouchableOpacity
               key={f.key}
               onPress={() => { setFilter(f.key); feedback('light'); }}
-              style={[
-                lay.filterTab,
-                { backgroundColor: active ? colors.primary : colors.surface, borderColor: active ? colors.primary : colors.border },
-              ]}
+              style={[lay.filterTab, { borderBottomColor: active ? colors.primary : 'transparent' }]}
             >
-              <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: active ? '#FFF' : colors.textSecondary }}>
+              <Text style={{ fontSize: FontSize.xs, fontWeight: active ? '700' : '500', color: active ? colors.primary : colors.textSecondary }}>
                 {f.label}
               </Text>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -403,15 +396,14 @@ const lay = StyleSheet.create({
     borderBottomWidth: 1,
   },
   filterRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
+    flexDirection: 'row',
+    borderBottomWidth: 1,
   },
   filterTab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    borderWidth: 1,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderBottomWidth: 2.5,
   },
   body: {
     paddingHorizontal: 20,

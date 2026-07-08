@@ -3,16 +3,13 @@ const { withNativeWind } = require('nativewind/metro')
 
 const config = getDefaultConfig(__dirname)
 
-// Allow importing .svg files as React components
-const { transformer, resolver } = config
-config.transformer = {
-  ...transformer,
-  babelTransformerPath: require.resolve('react-native-svg-transformer'),
-}
-config.resolver = {
-  ...resolver,
-  assetExts: resolver.assetExts.filter((ext) => ext !== 'svg'),
-  sourceExts: [...resolver.sourceExts, 'svg'],
-}
+// Apply NativeWind first so its babelTransformerPath is set, then chain SVG transformer on top.
+// svg-transformer.js routes .svg files to react-native-svg-transformer and
+// delegates everything else to the Expo/NativeWind transformer.
+const nwConfig = withNativeWind(config, { input: './global.css' })
 
-module.exports = withNativeWind(config, { input: './global.css' })
+nwConfig.transformer.babelTransformerPath = require.resolve('./svg-transformer')
+nwConfig.resolver.assetExts = nwConfig.resolver.assetExts.filter((ext) => ext !== 'svg')
+nwConfig.resolver.sourceExts = [...nwConfig.resolver.sourceExts, 'svg']
+
+module.exports = nwConfig

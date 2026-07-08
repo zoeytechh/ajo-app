@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, StatusBar, StyleSheet,
+  RefreshControl, StatusBar, StyleSheet, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ import { FontSize, Radius, Shadow } from '../src/theme';
 import { Skeleton, Pill } from '../src/components';
 
 // ─── Frequency label ──────────────────────────────────────────────────────────
-const FREQ: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+const FREQ: Record<string, string> = { daily: 'Daily contribution', weekly: 'Weekly contribution', monthly: 'Monthly contribution' };
 const freqLabel = (f: string) => FREQ[f] ?? f;
 
 // ─── Group Card ───────────────────────────────────────────────────────────────
@@ -140,8 +140,24 @@ export default function HomeRoute() {
 
   const handleLogout = () => { logout(); router.replace('/login'); };
   const goToGroup   = (id: number) => router.push(`/group/${id}` as any);
-  const goToCreate  = () => router.push('/group/create' as any);
-  const goToJoin    = () => router.push('/group/join' as any);
+
+  const requirePhoto = (action: () => void) => {
+    if (!user?.profile_photo) {
+      Alert.alert(
+        'Profile Photo Required',
+        'Upload a profile photo before creating or joining groups.',
+        [
+          { text: 'Go to Profile', onPress: () => router.push('/profile') },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+    action();
+  };
+
+  const goToCreate = () => requirePhoto(() => router.push('/group/create' as any));
+  const goToJoin   = () => requirePhoto(() => router.push('/group/join' as any));
 
   const adminGroups  = groups?.filter((g) => g.admin.id === user?.id) ?? [];
   const joinedGroups = groups?.filter((g) => g.admin.id !== user?.id) ?? [];
@@ -167,7 +183,7 @@ export default function HomeRoute() {
 
       {/* ── Body ── */}
       <ScrollView
-        contentContainerStyle={[s.body, { paddingBottom: 100 }]}
+        contentContainerStyle={[s.body, { paddingBottom: 160 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -306,7 +322,7 @@ const s = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 32,
+    bottom: 92,
     right: 24,
     width: 58,
     height: 58,

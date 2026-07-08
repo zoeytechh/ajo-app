@@ -21,6 +21,7 @@ export interface AjoUser {
   role: 'member' | 'group_admin' | 'super_admin';
   is_email_verified: boolean;
   is_phone_verified: boolean;
+  profile_photo: string | null;
   fcm_token: string | null;
   date_joined: string;
 }

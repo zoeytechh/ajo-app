@@ -1,18 +1,22 @@
 import api from './api';
+import type { AjoUser } from '../store/useAppStore';
 
 export const userService = {
-  getProfile: async () => {
-    const res = await api.get('/users/profile');
-    return res.data.data;
+  uploadProfilePhoto: async (uri: string, mimeType = 'image/jpeg'): Promise<{ profile_photo: string }> => {
+    const form = new FormData();
+    form.append('photo', { uri, name: 'profile.jpg', type: mimeType } as any);
+    const res = await api.post('/api/auth/profile-photo/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
   },
 
-  updateProfile: async (data: { name?: string; email?: string }) => {
-    const res = await api.patch('/users/profile', data);
-    return res.data.data;
+  updateProfile: async (data: { first_name?: string; last_name?: string; phone_number?: string }): Promise<AjoUser> => {
+    const res = await api.patch('/api/auth/me/', data);
+    return res.data;
   },
 
-  uploadAvatar: async (base64Image: string) => {
-    const res = await api.post('/users/profile/avatar', { image: base64Image }, { timeout: 30000 });
-    return res.data.data;
+  deleteAccount: async (): Promise<void> => {
+    await api.delete('/api/auth/me/');
   },
 };

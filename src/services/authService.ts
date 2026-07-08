@@ -9,6 +9,7 @@ export interface RegisterPayload {
   password: string;
   first_name: string;
   last_name: string;
+  device_id?: string;
 }
 
 export interface LoginPayload {

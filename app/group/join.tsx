@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import {
   View, Text, StatusBar, KeyboardAvoidingView,
-  Platform, TouchableOpacity, StyleSheet,
+  Platform, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useAuthStore } from '../../src/store/useAppStore';
 import { groupService } from '../../src/services/groupService';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import { Button, Input, LoadingOverlay, feedback } from '../../src/components';
 
 export default function JoinGroupRoute() {
   const { colors, isDark } = useTheme();
+  const { user } = useAuthStore();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -41,6 +43,17 @@ export default function JoinGroupRoute() {
 
   const handleSubmit = () => {
     setError('');
+    if (!user?.profile_photo) {
+      Alert.alert(
+        'Profile Photo Required',
+        'Upload a profile photo before joining a group.',
+        [
+          { text: 'Go to Profile', onPress: () => router.replace('/profile' as any) },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
     const trimmed = code.trim().toUpperCase();
     if (trimmed.length !== 8) {
       setError('Invite codes are 8 characters long.');

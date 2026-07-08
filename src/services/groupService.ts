@@ -34,12 +34,30 @@ export interface Membership {
   status: MembershipStatus;
   joined_at: string | null;
   total_approved: string;
+  consecutive_default_streak: number;
+}
+
+export interface RemovalProposal {
+  id: number;
+  target_membership: number;
+  target_name: string;
+  target_photo: string | null;
+  target_user_id: number;
+  status: 'pending' | 'passed' | 'rejected';
+  eligible_count: number;
+  yes_count: number;
+  no_count: number;
+  current_user_vote: boolean | null;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export interface Payment {
   id: number;
   member_name: string;
   member_email: string;
+  group_id: number;
+  group_name: string;
   amount_entered: string;
   amount_ocr: string | null;
   status: PaymentStatus;
@@ -72,7 +90,7 @@ export interface Defaulter {
 
 export interface Subscription {
   id: number;
-  months: number;
+  cycles: number;
   amount: string;
   status: 'pending' | 'successful' | 'failed';
   tx_ref: string;
@@ -80,6 +98,14 @@ export interface Subscription {
   verified_at: string | null;
   initiated_by_email: string;
   group_name: string;
+}
+
+export interface CollectionSlot {
+  id: number;             // membership_id
+  user_id: number;
+  full_name: string;
+  profile_photo: string | null;
+  collection_slot: number;
 }
 
 // ─── Input types ──────────────────────────────────────────────────────────────
@@ -125,6 +151,11 @@ export const groupService = {
     return res.data;
   },
 
+  updateGroup: async (groupId: number, data: Partial<Pick<Group, 'name' | 'description' | 'grace_period_days'> & { rules?: string }>): Promise<Group> => {
+    const res = await api.patch(`/api/groups/${groupId}/`, data);
+    return res.data;
+  },
+
   joinGroup: async (groupId: number): Promise<Membership> => {
     const res = await api.post(`/api/groups/${groupId}/join/`);
     return res.data;
@@ -151,11 +182,31 @@ export const groupService = {
     await api.delete(`/api/groups/${groupId}/members/${membershipId}/`);
   },
 
+  proposeRemoval: async (groupId: number, membershipId: number): Promise<RemovalProposal> => {
+    const res = await api.post(`/api/groups/${groupId}/members/${membershipId}/propose-removal/`);
+    return res.data;
+  },
+
+  castRemovalVote: async (groupId: number, proposalId: number, approved: boolean): Promise<RemovalProposal> => {
+    const res = await api.post(`/api/groups/${groupId}/removals/${proposalId}/vote/`, { approved });
+    return res.data;
+  },
+
+  getRemovalProposals: async (groupId: number): Promise<RemovalProposal[]> => {
+    const res = await api.get(`/api/groups/${groupId}/removals/`);
+    return res.data;
+  },
+
   // ── Payments ─────────────────────────────────────────────────────────────────
 
   getPayments: async (groupId: number, status?: PaymentStatus): Promise<Payment[]> => {
     const params = status ? { status } : {};
     const res = await api.get(`/api/groups/${groupId}/payments/`, { params });
+    return res.data;
+  },
+
+  getPaymentHistory: async (): Promise<Payment[]> => {
+    const res = await api.get('/api/payments/history/');
     return res.data;
   },
 
@@ -227,10 +278,22 @@ export const groupService = {
     return res.data;
   },
 
+  // ── Collection order ─────────────────────────────────────────────────────────
+
+  getCollectionOrder: async (groupId: number): Promise<CollectionSlot[]> => {
+    const res = await api.get(`/api/groups/${groupId}/collection-order/`);
+    return res.data;
+  },
+
+  updateCollectionOrder: async (groupId: number, order: number[]): Promise<CollectionSlot[]> => {
+    const res = await api.patch(`/api/groups/${groupId}/collection-order/`, { order });
+    return res.data;
+  },
+
   // ── Subscription ─────────────────────────────────────────────────────────────
 
-  initiateSubscription: async (groupId: number, months: number): Promise<{ link: string; subscription: Subscription }> => {
-    const res = await api.post(`/api/groups/${groupId}/subscription/initiate/`, { months });
+  initiateSubscription: async (groupId: number, cycles: number): Promise<{ link: string; subscription: Subscription }> => {
+    const res = await api.post(`/api/groups/${groupId}/subscription/initiate/`, { cycles });
     return res.data;
   },
 

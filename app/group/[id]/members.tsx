@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
+  View, Text, ScrollView, TouchableOpacity, Image,
   RefreshControl, StatusBar, StyleSheet, Modal, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useAuthStore } from '../../../src/store/useAppStore';
-import { groupService, type Membership } from '../../../src/services/groupService';
+import { groupService, type Membership, type RemovalProposal } from '../../../src/services/groupService';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
 import { Pill, Skeleton, LoadingOverlay, feedback } from '../../../src/components';
 
@@ -53,6 +53,93 @@ const ConfirmModal: React.FC<{
   );
 };
 
+// ─── Active removal proposal card ─────────────────────────────────────────────
+const ProposalCard: React.FC<{
+  proposal: RemovalProposal;
+  currentUserId: number | undefined;
+  onVote: (proposalId: number, approved: boolean) => void;
+  voting: boolean;
+  colors: any;
+}> = ({ proposal, currentUserId, onVote, voting, colors }) => {
+  const pct = proposal.eligible_count > 0
+    ? Math.round((proposal.yes_count / proposal.eligible_count) * 100)
+    : 0;
+  const isTarget    = proposal.target_user_id === currentUserId;
+  const hasVoted    = proposal.current_user_vote !== null;
+  const votedYes    = proposal.current_user_vote === true;
+
+  return (
+    <View style={[s.proposalCard, { backgroundColor: colors.surface, borderColor: colors.warningLight, ...Shadow.soft(colors.black) }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        {proposal.target_photo ? (
+          <Image source={{ uri: proposal.target_photo }} style={s.proposalAvatar} />
+        ) : (
+          <View style={[s.proposalAvatar, { backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.primary }}>
+              {proposal.target_name.charAt(0)}
+            </Text>
+          </View>
+        )}
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+            Proposed removal
+          </Text>
+          <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary }}>
+            {proposal.target_name}
+          </Text>
+        </View>
+        <Pill label={`${pct}% yes`} bg={colors.warningLight} color={colors.warningDark} />
+      </View>
+
+      {/* Vote bar */}
+      <View style={[s.voteBar, { backgroundColor: colors.border }]}>
+        <View style={[s.voteBarFill, { width: `${pct}%` as any, backgroundColor: colors.warning }]} />
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 12 }}>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
+          {proposal.yes_count} yes · {proposal.no_count} no · {proposal.eligible_count} eligible
+        </Text>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary }}>
+          Need {`>`}50% to pass
+        </Text>
+      </View>
+
+      {/* Vote buttons */}
+      {isTarget ? (
+        <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, textAlign: 'center' }}>
+          You cannot vote on your own removal
+        </Text>
+      ) : hasVoted ? (
+        <View style={[s.votedBadge, { backgroundColor: votedYes ? colors.warningLight : colors.successLight }]}>
+          <Ionicons name={votedYes ? 'thumbs-down' : 'thumbs-up'} size={14} color={votedYes ? colors.warningDark : colors.successDark} />
+          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: votedYes ? colors.warningDark : colors.successDark, marginLeft: 6 }}>
+            You voted to {votedYes ? 'remove' : 'keep'} this member
+          </Text>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => onVote(proposal.id, false)}
+            disabled={voting}
+            style={[s.voteBtn, { backgroundColor: colors.successLight, flex: 1 }]}
+          >
+            <Ionicons name="thumbs-up" size={15} color={colors.successDark} />
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.successDark, marginLeft: 6 }}>Keep</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => onVote(proposal.id, true)}
+            disabled={voting}
+            style={[s.voteBtn, { backgroundColor: colors.errorLight, flex: 1 }]}
+          >
+            <Ionicons name="thumbs-down" size={15} color={colors.errorDark} />
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.errorDark, marginLeft: 6 }}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
 // ─── Member row ───────────────────────────────────────────────────────────────
 const statusColor = (status: string, colors: any) => ({
   pending:  { bg: colors.warningLight,  fg: colors.warningDark  },
@@ -65,10 +152,12 @@ const MemberRow: React.FC<{
   isAdmin: boolean;
   onApprove: (m: Membership) => void;
   onReject:  (m: Membership) => void;
-  onRemove:  (m: Membership) => void;
-}> = ({ membership, isAdmin, onApprove, onReject, onRemove }) => {
+  onProposeRemoval: (m: Membership) => void;
+}> = ({ membership, isAdmin, onApprove, onReject, onProposeRemoval }) => {
   const { colors } = useTheme();
   const sc = statusColor(membership.status, colors);
+  const streak = membership.consecutive_default_streak ?? 0;
+  const isSuggestedForRemoval = streak >= 3;
 
   return (
     <View style={[s.memberRow, { borderBottomColor: colors.border }]}>
@@ -79,15 +168,30 @@ const MemberRow: React.FC<{
       </View>
 
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-          {membership.user.first_name} {membership.user.last_name}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+            {membership.user.first_name} {membership.user.last_name}
+          </Text>
+          {isSuggestedForRemoval && (
+            <View style={[s.streakBadge, { backgroundColor: colors.errorLight }]}>
+              <Ionicons name="flame" size={11} color={colors.error} />
+              <Text style={{ fontSize: 10, fontWeight: '800', color: colors.error, marginLeft: 3 }}>
+                {streak}× default
+              </Text>
+            </View>
+          )}
+        </View>
         <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
           {membership.user.email}
         </Text>
         {membership.status === 'approved' && Number(membership.total_approved) > 0 && (
           <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginTop: 2 }}>
             Total paid: ₦{Number(membership.total_approved).toLocaleString()}
+          </Text>
+        )}
+        {isAdmin && isSuggestedForRemoval && membership.status === 'approved' && (
+          <Text style={{ fontSize: FontSize.xs, color: colors.error, marginTop: 3, fontWeight: '600' }}>
+            Defaulted {streak} cycles in a row — consider a removal vote
           </Text>
         )}
       </View>
@@ -101,29 +205,25 @@ const MemberRow: React.FC<{
               style={[s.actionChip, { backgroundColor: colors.successLight }]}
             >
               <Ionicons name="checkmark" size={14} color={colors.successDark} />
-              <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.successDark, marginLeft: 3 }}>
-                Approve
-              </Text>
+              <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.successDark, marginLeft: 3 }}>Approve</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => onReject(membership)}
               style={[s.actionChip, { backgroundColor: colors.errorLight }]}
             >
               <Ionicons name="close" size={14} color={colors.errorDark} />
-              <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.errorDark, marginLeft: 3 }}>
-                Reject
-              </Text>
+              <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.errorDark, marginLeft: 3 }}>Reject</Text>
             </TouchableOpacity>
           </View>
         )}
         {isAdmin && membership.status === 'approved' && (
           <TouchableOpacity
-            onPress={() => onRemove(membership)}
-            style={[s.actionChip, { backgroundColor: colors.errorLight }]}
+            onPress={() => onProposeRemoval(membership)}
+            style={[s.actionChip, { backgroundColor: colors.warningLight }]}
           >
-            <Ionicons name="person-remove-outline" size={13} color={colors.errorDark} />
-            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.errorDark, marginLeft: 3 }}>
-              Remove
+            <Ionicons name="alert-circle-outline" size={13} color={colors.warningDark} />
+            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.warningDark, marginLeft: 3 }}>
+              Propose Removal
             </Text>
           </TouchableOpacity>
         )}
@@ -162,6 +262,12 @@ export default function MembersRoute() {
     enabled: !!groupId,
   });
 
+  const { data: proposals = [], isLoading: proposalsLoading } = useQuery({
+    queryKey: ['removals', groupId],
+    queryFn: () => groupService.getRemovalProposals(groupId),
+    enabled: !!groupId,
+  });
+
   const isGroupAdmin = group?.admin.id === user?.id;
 
   const reviewMutation = useMutation({
@@ -175,18 +281,45 @@ export default function MembersRoute() {
     onError: () => feedback('error'),
   });
 
-  const removeMutation = useMutation({
-    mutationFn: (membershipId: number) => groupService.removeMember(groupId, membershipId),
+  const proposeMutation = useMutation({
+    mutationFn: (membershipId: number) => groupService.proposeRemoval(groupId, membershipId),
     onSuccess: () => {
       feedback('success');
-      queryClient.invalidateQueries({ queryKey: ['members', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['removals', groupId] });
+    },
+    onError: (err: any) => {
+      feedback('error');
+      const msg = err.response?.data?.detail ?? 'Could not start removal vote.';
+      setConfirmModal((prev) => ({ ...prev, visible: false }));
+      // Show error briefly via alert — modal is already closed
+      setTimeout(() => {
+        setConfirmModal({
+          visible: true,
+          title: 'Cannot start vote',
+          message: msg,
+          confirmLabel: 'OK',
+          destructive: false,
+          onConfirm: closeModal,
+        });
+      }, 100);
+    },
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: ({ proposalId, approved }: { proposalId: number; approved: boolean }) =>
+      groupService.castRemovalVote(groupId, proposalId, approved),
+    onSuccess: (updatedProposal) => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['removals', groupId] });
+      if (updatedProposal.status === 'passed') {
+        queryClient.invalidateQueries({ queryKey: ['members', groupId] });
+        queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+      }
     },
     onError: () => feedback('error'),
   });
 
-  const closeModal = () =>
-    setConfirmModal((prev) => ({ ...prev, visible: false }));
+  const closeModal = () => setConfirmModal((prev) => ({ ...prev, visible: false }));
 
   const handleApprove = (m: Membership) => {
     setConfirmModal({
@@ -195,10 +328,7 @@ export default function MembersRoute() {
       message: `Approve ${m.user.first_name} ${m.user.last_name} to join this group?`,
       confirmLabel: 'Approve',
       destructive: false,
-      onConfirm: () => {
-        closeModal();
-        reviewMutation.mutate({ membershipId: m.id, action: 'approve' });
-      },
+      onConfirm: () => { closeModal(); reviewMutation.mutate({ membershipId: m.id, action: 'approve' }); },
     });
   };
 
@@ -209,24 +339,22 @@ export default function MembersRoute() {
       message: `Reject ${m.user.first_name} ${m.user.last_name}'s join request?`,
       confirmLabel: 'Reject',
       destructive: true,
-      onConfirm: () => {
-        closeModal();
-        reviewMutation.mutate({ membershipId: m.id, action: 'reject' });
-      },
+      onConfirm: () => { closeModal(); reviewMutation.mutate({ membershipId: m.id, action: 'reject' }); },
     });
   };
 
-  const handleRemove = (m: Membership) => {
+  const handleProposeRemoval = (m: Membership) => {
+    const streak = m.consecutive_default_streak ?? 0;
+    const streakNote = streak >= 3
+      ? `\n\nNote: This member has defaulted ${streak} cycles in a row.`
+      : '';
     setConfirmModal({
       visible: true,
-      title: 'Remove member',
-      message: `Remove ${m.user.first_name} ${m.user.last_name} from this group? This cannot be undone.`,
-      confirmLabel: 'Remove',
+      title: 'Start a removal vote',
+      message: `This will notify all members to vote on removing ${m.user.first_name} ${m.user.last_name}. They will be removed only if more than 50% of members vote yes.${streakNote}`,
+      confirmLabel: 'Start vote',
       destructive: true,
-      onConfirm: () => {
-        closeModal();
-        removeMutation.mutate(m.id);
-      },
+      onConfirm: () => { closeModal(); proposeMutation.mutate(m.id); },
     });
   };
 
@@ -234,12 +362,12 @@ export default function MembersRoute() {
   const approved = members?.filter((m) => m.status === 'approved') ?? [];
   const rejected = members?.filter((m) => m.status === 'rejected') ?? [];
 
-  const isBusy = reviewMutation.isPending || removeMutation.isPending;
+  const isBusy = reviewMutation.isPending || proposeMutation.isPending;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <LoadingOverlay visible={isBusy} message="Updating member…" />
+      <LoadingOverlay visible={isBusy} message={proposeMutation.isPending ? 'Starting vote…' : 'Updating member…'} />
 
       <ConfirmModal
         visible={confirmModal.visible}
@@ -256,9 +384,7 @@ export default function MembersRoute() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>
-          Members
-        </Text>
+        <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>Members</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -269,6 +395,23 @@ export default function MembersRoute() {
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
+        {/* Active removal votes */}
+        {proposals.length > 0 && (
+          <>
+            <Text style={sectionLabel(colors)}>Active Removal Votes ({proposals.length})</Text>
+            {proposals.map((p) => (
+              <ProposalCard
+                key={p.id}
+                proposal={p}
+                currentUserId={user?.id}
+                onVote={(proposalId, approved) => voteMutation.mutate({ proposalId, approved })}
+                voting={voteMutation.isPending}
+                colors={colors}
+              />
+            ))}
+          </>
+        )}
+
         {isLoading ? (
           <>
             {[1, 2, 3].map((i) => (
@@ -289,23 +432,14 @@ export default function MembersRoute() {
                 <Text style={sectionLabel(colors)}>Pending Requests ({pending.length})</Text>
                 <View style={[s.sectionCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                   {pending.map((m) => (
-                    <MemberRow
-                      key={m.id}
-                      membership={m}
-                      isAdmin={isGroupAdmin}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onRemove={handleRemove}
-                    />
+                    <MemberRow key={m.id} membership={m} isAdmin={isGroupAdmin} onApprove={handleApprove} onReject={handleReject} onProposeRemoval={handleProposeRemoval} />
                   ))}
                 </View>
               </>
             )}
 
             {/* Approved members */}
-            <Text style={sectionLabel(colors)}>
-              Members ({approved.length})
-            </Text>
+            <Text style={sectionLabel(colors)}>Members ({approved.length})</Text>
             {approved.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                 <Ionicons name="people-outline" size={40} color={colors.textTertiary} />
@@ -316,32 +450,18 @@ export default function MembersRoute() {
             ) : (
               <View style={[s.sectionCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                 {approved.map((m) => (
-                  <MemberRow
-                    key={m.id}
-                    membership={m}
-                    isAdmin={isGroupAdmin}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onRemove={handleRemove}
-                  />
+                  <MemberRow key={m.id} membership={m} isAdmin={isGroupAdmin} onApprove={handleApprove} onReject={handleReject} onProposeRemoval={handleProposeRemoval} />
                 ))}
               </View>
             )}
 
-            {/* Rejected (admin view only) */}
+            {/* Rejected (admin only) */}
             {isGroupAdmin && rejected.length > 0 && (
               <>
                 <Text style={sectionLabel(colors)}>Rejected ({rejected.length})</Text>
                 <View style={[s.sectionCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                   {rejected.map((m) => (
-                    <MemberRow
-                      key={m.id}
-                      membership={m}
-                      isAdmin={isGroupAdmin}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onRemove={handleRemove}
-                    />
+                    <MemberRow key={m.id} membership={m} isAdmin={isGroupAdmin} onApprove={handleApprove} onReject={handleReject} onProposeRemoval={handleProposeRemoval} />
                   ))}
                 </View>
               </>
@@ -354,7 +474,7 @@ export default function MembersRoute() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const layout = StyleSheet.create({
+const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -367,7 +487,7 @@ const layout = StyleSheet.create({
   body: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   sectionCard: {
     borderRadius: Radius.lg,
@@ -395,6 +515,47 @@ const layout = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.full,
   },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  proposalCard: {
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  proposalAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  voteBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  voteBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  voteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+  },
+  votedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: Radius.md,
+    justifyContent: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -414,8 +575,6 @@ const layout = StyleSheet.create({
     alignItems: 'center',
   },
 });
-
-const s = layout;
 
 const sectionLabel = (colors: any) => ({
   fontSize: FontSize.xs,

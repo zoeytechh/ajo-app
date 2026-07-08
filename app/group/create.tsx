@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/hooks/useTheme';
 import { groupService, type CreateGroupPayload } from '../../src/services/groupService';
 import { FontSize, Radius } from '../../src/theme';
@@ -147,6 +148,7 @@ const DateField: React.FC<{
 // ─── Create Group Screen ──────────────────────────────────────────────────────
 export default function CreateGroupRoute() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -235,7 +237,7 @@ export default function CreateGroupRoute() {
         />
 
         {/* Header */}
-        <View style={[lay.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[lay.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -427,14 +429,13 @@ const lay = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
   body: {
     paddingHorizontal: 24,
     paddingTop: 24,
-    paddingBottom: 48,
+    paddingBottom: 120,
   },
   freqRow: {
     flexDirection: 'row',

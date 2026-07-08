@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Animated, StatusBar, Dimensions, Easing } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Animated, StatusBar, Dimensions, Easing, useColorScheme } from 'react-native';
 import AjoLogo from '../src/components/AjoLogo';
 
 const { height } = Dimensions.get('window');
@@ -9,6 +9,10 @@ interface SplashScreenProps {
 }
 
 export default function SplashScreen({ onComplete }: SplashScreenProps) {
+  const colorScheme      = useColorScheme();
+  const isDark           = colorScheme === 'dark';
+  const bgColor          = isDark ? '#0D1117' : '#FFFFFF';
+
   const containerOpacity = useRef(new Animated.Value(0)).current;
   const containerScale   = useRef(new Animated.Value(0.88)).current;
   const accentOpacity    = useRef(new Animated.Value(0)).current;
@@ -42,8 +46,8 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+    <View style={{ flex: 1, backgroundColor: bgColor, alignItems: 'center', justifyContent: 'center' }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
 
       <Animated.View
         style={{

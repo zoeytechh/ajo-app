@@ -446,11 +446,12 @@ const s = StyleSheet.create({
     padding: 32,
     borderRadius: Radius.xl,
     alignItems: 'center',
-    width: 200,
+    width: 220,
   },
   loadingText: {
-    fontSize: FontSize.base,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
 });

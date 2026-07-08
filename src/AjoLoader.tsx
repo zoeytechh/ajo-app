@@ -54,7 +54,7 @@ export const AjoLoader: React.FC<AjoLoaderProps> = ({ size = 64 }) => {
     <View style={{ width: size, height: size }}>
       {/* Ring — spins continuously */}
       <Animated.View
-        style={{ position: 'absolute', width: size, height: size, transform: [{ rotate: spin }] }}
+        style={{ position: 'absolute', width: size, height: size, backgroundColor: 'transparent', zIndex: 1, transform: [{ rotate: spin }] }}
       >
         <Svg width={size} height={size} viewBox="0 0 200 200">
           <Path
@@ -74,9 +74,9 @@ export const AjoLoader: React.FC<AjoLoaderProps> = ({ size = 64 }) => {
         </Svg>
       </Animated.View>
 
-      {/* Shield + checkmark — pulses independently */}
+      {/* Shield + checkmark — pulses independently (zIndex 2 keeps it on top of ring on Android) */}
       <Animated.View
-        style={{ position: 'absolute', width: size, height: size, transform: [{ scale: pulseAnim }] }}
+        style={{ position: 'absolute', width: size, height: size, backgroundColor: 'transparent', zIndex: 2, transform: [{ scale: pulseAnim }] }}
       >
         <Svg width={size} height={size} viewBox="0 0 200 200">
           <Path

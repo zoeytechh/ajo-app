@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, StatusBar, StyleSheet,
+  RefreshControl, StatusBar, StyleSheet, Alert,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useAuthStore } from '../../src/store/useAppStore';
-import { groupService, type Payment, type Cycle } from '../../src/services/groupService';
+import { groupService, type Payment, type Cycle, type Group, type CollectionSlot } from '../../src/services/groupService';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import { Skeleton, Pill, LoadingOverlay } from '../../src/components';
 
@@ -45,7 +45,7 @@ const InviteCard: React.FC<{ groupId: number; inviteCode: string; colors: any }>
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={{ fontSize: FontSize.xl, fontWeight: '800', color: colors.primary, letterSpacing: 3, flex: 1 }}>
+        <Text style={{ fontSize: FontSize.md, fontWeight: '800', color: colors.primary, letterSpacing: 2, flex: 1 }}>
           {regenMutation.isPending ? '········' : inviteCode}
         </Text>
 
@@ -80,7 +80,16 @@ const InviteCard: React.FC<{ groupId: number; inviteCode: string; colors: any }>
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const freqLabel = (f: string) => ({ daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[f] ?? f);
+const freqLabel = (f: string) => ({ daily: 'Daily contribution', weekly: 'Weekly contribution', monthly: 'Monthly contribution' }[f] ?? f);
+
+const computePeriodLabel = (cycle: Cycle, group: Group): string => {
+  const diffDays = Math.max(0, Math.floor((Date.now() - new Date(cycle.start_date).getTime()) / 86_400_000));
+  switch (group.contribution_frequency) {
+    case 'monthly': return `Month ${Math.floor(diffDays / 30) + 1}`;
+    case 'weekly':  return `Week ${Math.floor(diffDays / 7) + 1}`;
+    default:        return `Day ${diffDays + 1}`;
+  }
+};
 
 const formatAmt = (v: string | number) => `₦${Number(v).toLocaleString()}`;
 
@@ -114,7 +123,7 @@ const PaymentRow: React.FC<{ payment: Payment }> = ({ payment }) => {
 };
 
 // ─── Cycle status card ────────────────────────────────────────────────────────
-const CycleCard: React.FC<{ cycle: Cycle | undefined; colors: any }> = ({ cycle, colors }) => {
+const CycleCard: React.FC<{ cycle: Cycle | undefined; group: Group | undefined; colors: any }> = ({ cycle, group, colors }) => {
   if (!cycle) {
     return (
       <View style={[s.cycleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -128,14 +137,16 @@ const CycleCard: React.FC<{ cycle: Cycle | undefined; colors: any }> = ({ cycle,
 
   const sc = statusColor(cycle.status, colors);
   const end = new Date(cycle.end_date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+  const periodLabel = group ? computePeriodLabel(cycle, group) : null;
 
   return (
     <View style={[s.cycleCard, { backgroundColor: colors.surface, borderColor: colors.primaryBorder }]}>
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
           <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
             Cycle {cycle.cycle_number}
           </Text>
+          {periodLabel && <Pill label={periodLabel} bg={colors.primaryTint} color={colors.primary} />}
           <Pill label={cycle.status} bg={sc.bg} color={sc.fg} />
         </View>
         <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
@@ -190,6 +201,12 @@ export default function GroupDetailRoute() {
     enabled: !!groupId,
   });
 
+  const { data: collectionOrder } = useQuery({
+    queryKey: ['collection-order', groupId],
+    queryFn: () => groupService.getCollectionOrder(groupId),
+    enabled: !!groupId,
+  });
+
   const joinMutation = useMutation({
     mutationFn: () => groupService.joinGroup(groupId),
     onSuccess: () => {
@@ -198,11 +215,37 @@ export default function GroupDetailRoute() {
     },
   });
 
+  const handleJoinPress = () => {
+    if (!user?.profile_photo) {
+      Alert.alert(
+        'Profile Photo Required',
+        'Upload a profile photo before joining a group.',
+        [
+          { text: 'Go to Profile', onPress: () => router.push('/profile' as any) },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+    joinMutation.mutate();
+  };
+
   const isGroupAdmin = group?.admin.id === user?.id;
   const activeCycle  = cycles?.find((c) => c.status === 'active');
 
   // Pending items count (admin only)
   const pendingPayments = payments?.filter((p) => p.status === 'pending').length ?? 0;
+
+  // Total approved contributions across all members in this group
+  const totalGroupContributions = (payments ?? [])
+    .filter((p) => p.status === 'approved')
+    .reduce((sum, p) => sum + parseFloat(p.amount_entered), 0);
+
+  // Current collector = member whose slot matches the active cycle number
+  const activeCycleNumber = activeCycle?.cycle_number ?? null;
+  const currentCollector: CollectionSlot | undefined = activeCycleNumber
+    ? collectionOrder?.find((s) => s.collection_slot === activeCycleNumber)
+    : collectionOrder?.[0];
 
   if (groupLoading) {
     return (
@@ -240,7 +283,7 @@ export default function GroupDetailRoute() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />
         }
@@ -274,7 +317,7 @@ export default function GroupDetailRoute() {
               <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: '#FFF' }}>
                 {formatAmt(group.contribution_amount)}
               </Text>
-              <Text style={{ fontSize: FontSize.xs, color: 'rgba(255,255,255,0.7)' }}>
+              <Text style={{ fontSize: FontSize.xs, color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
                 {freqLabel(group.contribution_frequency)}
               </Text>
             </View>
@@ -284,6 +327,17 @@ export default function GroupDetailRoute() {
                 {group.member_count}
               </Text>
               <Text style={{ fontSize: FontSize.xs, color: 'rgba(255,255,255,0.7)' }}>Members</Text>
+            </View>
+            <View style={s.statDivider} />
+            <View style={s.statItem}>
+              {paymentsLoading ? (
+                <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: 'rgba(255,255,255,0.4)' }}>—</Text>
+              ) : (
+                <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: '#FFF' }} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatAmt(totalGroupContributions)}
+                </Text>
+              )}
+              <Text style={{ fontSize: FontSize.xs, color: 'rgba(255,255,255,0.7)' }}>Cycle collection</Text>
             </View>
           </View>
         </View>
@@ -316,7 +370,62 @@ export default function GroupDetailRoute() {
             <Skeleton width="100%" height={64} radius={Radius.lg} style={{ marginBottom: 20 }} />
           ) : (
             <View style={{ marginBottom: 20 }}>
-              <CycleCard cycle={activeCycle} colors={colors} />
+              <CycleCard cycle={activeCycle} group={group} colors={colors} />
+            </View>
+          )}
+
+          {/* ── Collection Schedule ── */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }}>
+              Collection Schedule
+            </Text>
+            {isGroupAdmin && (
+              <TouchableOpacity onPress={() => router.push(`/group/${groupId}/collection-order` as any)}>
+                <Text style={{ fontSize: FontSize.sm, color: colors.primary, fontWeight: '600' }}>Edit Order</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {currentCollector && (
+            <View style={[s.collectorCard, { backgroundColor: colors.primaryTint, borderColor: colors.primaryBorder }]}>
+              <Ionicons name="trophy-outline" size={18} color={colors.primary} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={{ fontSize: FontSize.xs, color: colors.primary, fontWeight: '600' }}>
+                  {activeCycleNumber ? `Cycle ${activeCycleNumber} collector` : 'First to collect'}
+                </Text>
+                <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
+                  {currentCollector.full_name}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {collectionOrder && collectionOrder.length > 0 && (
+            <View style={[s.section, { backgroundColor: colors.surface, ...Shadow.card(colors.black), marginBottom: 20 }]}>
+              {collectionOrder.map((slot, idx) => {
+                const isCurrentCollector = slot.collection_slot === activeCycleNumber;
+                return (
+                  <View
+                    key={slot.id}
+                    style={[
+                      s.slotRow,
+                      idx < collectionOrder.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                    ]}
+                  >
+                    <View style={[s.slotBadge, { backgroundColor: isCurrentCollector ? colors.primary : colors.background }]}>
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: isCurrentCollector ? '#FFF' : colors.textTertiary }}>
+                        {slot.collection_slot}
+                      </Text>
+                    </View>
+                    <Text style={{ flex: 1, marginLeft: 10, fontSize: FontSize.sm, fontWeight: isCurrentCollector ? '700' : '500', color: isCurrentCollector ? colors.primary : colors.textPrimary }}>
+                      {slot.full_name}
+                    </Text>
+                    {isCurrentCollector && (
+                      <Pill label="Now" bg={colors.primaryTint} color={colors.primary} />
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -349,6 +458,22 @@ export default function GroupDetailRoute() {
                 label="Cycles"
                 colors={colors}
                 onPress={() => router.push(`/group/${groupId}/cycles` as any)}
+              />
+            )}
+            {isGroupAdmin && (
+              <ActionBtn
+                icon="card-outline"
+                label="Subscription"
+                colors={colors}
+                onPress={() => router.push(`/group/${groupId}/subscription` as any)}
+              />
+            )}
+            {isGroupAdmin && (
+              <ActionBtn
+                icon="settings-outline"
+                label="Settings"
+                colors={colors}
+                onPress={() => router.push(`/group/${groupId}/settings` as any)}
               />
             )}
           </View>
@@ -386,7 +511,7 @@ export default function GroupDetailRoute() {
           {/* ── Join button (non-member) ── */}
           {!isGroupAdmin && (
             <TouchableOpacity
-              onPress={() => joinMutation.mutate()}
+              onPress={handleJoinPress}
               disabled={joinMutation.isPending}
               style={[s.joinBtn, { backgroundColor: colors.primary }]}
               activeOpacity={0.85}
@@ -496,5 +621,25 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: Radius.md,
+  },
+  collectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  slotBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

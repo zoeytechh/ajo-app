@@ -5,6 +5,7 @@ import {
   Platform, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Application from 'expo-application';
 import { FontSize, Radius } from './theme';
 import { Button, Input, Divider, OTPBox, LoadingOverlay, Bouncy, feedback } from './components';
 import Svg, { Path } from 'react-native-svg';
@@ -91,12 +92,16 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
     setServerError('');
     try {
       const nameParts = form.name.trim().split(/\s+/);
+      const device_id = Platform.OS === 'android'
+        ? (Application.getAndroidId() ?? '')
+        : (await Application.getIosIdForVendorAsync() ?? '');
       await authService.register({
         first_name:   nameParts[0],
         last_name:    nameParts.slice(1).join(' '),
         email:        form.email,
         phone_number: form.phone,
         password:     form.password,
+        device_id,
       });
       feedback('success');
       onSuccess(form.email, form.phone);
@@ -453,6 +458,8 @@ export const OTPScreen: React.FC<OTPProps> = ({ email, phone_number, onSuccess, 
             </Text>
           </Bouncy>
 
+          {/* WhatsApp OTP — re-enable before launch by removing the {false &&} wrapper */}
+          {false && (
           <Bouncy
             onPress={() => handleChannelChange('whatsapp')}
             style={[
@@ -478,6 +485,7 @@ export const OTPScreen: React.FC<OTPProps> = ({ email, phone_number, onSuccess, 
               WhatsApp
             </Text>
           </Bouncy>
+          )}
         </View>
 
         {/* ── Sent-to label ── */}

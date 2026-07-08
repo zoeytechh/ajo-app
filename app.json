@@ -33,7 +33,14 @@
       "expo-router",
       "expo-status-bar",
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ajo needs access to your photos so you can upload a profile picture and attach payment receipts."
+        }
+      ]
     ]
   }
 }

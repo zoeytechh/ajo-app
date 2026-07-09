@@ -1,0 +1,405 @@
+import { useState } from 'react';
+import {
+  View, Text, StatusBar, TouchableOpacity, StyleSheet,
+  ScrollView, RefreshControl, Alert, Modal,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../../src/hooks/useTheme';
+import { useAuthStore } from '../../../src/store/useAppStore';
+import { thriftService, type ThriftOrgMember, type CollectorReport } from '../../../src/services/thriftService';
+import { FontSize, Radius, Shadow } from '../../../src/theme';
+import { Button, Input, LoadingOverlay, feedback } from '../../../src/components';
+
+type Tab = 'collectors' | 'groups' | 'reports';
+
+const REPORT_STATUS_COLOR: Record<string, string> = {
+  pending:   '#F59E0B',
+  reviewed:  '#3B82F6',
+  resolved:  '#10B981',
+  dismissed: '#6B7280',
+};
+
+const REPORT_STATUS_LABEL: Record<string, string> = {
+  pending:   'Pending',
+  reviewed:  'Under Review',
+  resolved:  'Resolved',
+  dismissed: 'Dismissed',
+};
+
+// ─── Invite modal ─────────────────────────────────────────────────────────────
+
+function InviteModal({ orgId, visible, onClose }: { orgId: number; visible: boolean; onClose: () => void }) {
+  const { colors } = useTheme();
+  const queryClient = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => thriftService.inviteCollector(orgId, email.trim().toLowerCase()),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-org', orgId] });
+      setEmail('');
+      setError('');
+      onClose();
+    },
+    onError: (err: any) => {
+      feedback('error');
+      const d = err.response?.data ?? {};
+      setError(d.email ?? d.detail ?? 'Could not send invite.');
+    },
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+        <View style={{ backgroundColor: colors.surface, borderRadius: Radius.lg, padding: 24 }}>
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>Invite Collector</Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 20 }}>
+            Enter the email address of the person you want to invite as a collector.
+          </Text>
+          <Input
+            label="Email address"
+            placeholder="collector@email.com"
+            value={email}
+            onChangeText={(v) => { setEmail(v); setError(''); }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            error={error}
+            leftIcon={<Ionicons name="mail-outline" size={18} color={colors.primary} />}
+          />
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+            <Button label="Cancel" onPress={onClose} style={{ flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }} labelStyle={{ color: colors.textPrimary }} />
+            <Button label="Send Invite" onPress={() => mutation.mutate()} loading={mutation.isPending} disabled={!email.trim()} style={{ flex: 1 }} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Report resolution modal ──────────────────────────────────────────────────
+
+function ResolveReportModal({
+  orgId, report, visible, onClose,
+}: { orgId: number; report: CollectorReport | null; visible: boolean; onClose: () => void }) {
+  const { colors } = useTheme();
+  const queryClient = useQueryClient();
+  const [notes, setNotes] = useState('');
+
+  const mutate = (action: 'resolve' | 'dismiss' | 'review') => useMutation({
+    mutationFn: () => thriftService.resolveReport(orgId, report!.id, action, notes),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-org', orgId] });
+      setNotes('');
+      onClose();
+    },
+    onError: () => feedback('error'),
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: (action: 'resolve' | 'dismiss' | 'review') =>
+      thriftService.resolveReport(orgId, report!.id, action, notes),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-org', orgId] });
+      setNotes('');
+      onClose();
+    },
+    onError: () => feedback('error'),
+  });
+
+  if (!report) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
+        <View style={{ backgroundColor: colors.surface, borderRadius: Radius.lg, padding: 24 }}>
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>Review Report</Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 4 }}>Reason:</Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textPrimary, marginBottom: 16, lineHeight: 20 }}>{report.reason}</Text>
+          <Input
+            label="Resolution notes (optional)"
+            placeholder="What action was taken?"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            numberOfLines={3}
+          />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
+            <TouchableOpacity onPress={() => resolveMutation.mutate('review')}
+              style={[s.actionBtn, { backgroundColor: '#3B82F6' }]}>
+              <Text style={s.actionBtnLabel}>Mark Reviewed</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => resolveMutation.mutate('resolve')}
+              style={[s.actionBtn, { backgroundColor: colors.success }]}>
+              <Text style={s.actionBtnLabel}>Resolve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => resolveMutation.mutate('dismiss')}
+              style={[s.actionBtn, { backgroundColor: colors.textSecondary }]}>
+              <Text style={s.actionBtnLabel}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity onPress={onClose} style={{ marginTop: 12, alignItems: 'center' }}>
+            <Text style={{ color: colors.textSecondary, fontSize: FontSize.sm }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+export default function OrgDashboardRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const orgId  = Number(id);
+  const { colors, isDark } = useTheme();
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const [tab, setTab]                 = useState<Tab>('collectors');
+  const [inviteVisible, setInvite]    = useState(false);
+  const [selectedReport, setReport]   = useState<CollectorReport | null>(null);
+  const [resolveVisible, setResolve]  = useState(false);
+
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+    queryKey: ['thrift-org', orgId],
+    queryFn:  () => thriftService.getOrgDashboard(orgId),
+  });
+
+  const memberActionMutation = useMutation({
+    mutationFn: ({ memberId, action }: { memberId: number; action: 'suspend' | 'activate' | 'remove' }) =>
+      thriftService.orgMemberAction(orgId, memberId, action),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-org', orgId] });
+    },
+    onError: () => feedback('error'),
+  });
+
+  const confirmMemberAction = (member: ThriftOrgMember, action: 'suspend' | 'activate' | 'remove') => {
+    const labels = { suspend: 'Suspend', activate: 'Reactivate', remove: 'Remove' };
+    Alert.alert(
+      `${labels[action]} Collector`,
+      `${labels[action]} ${member.user.first_name} ${member.user.last_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: labels[action], style: action === 'remove' ? 'destructive' : 'default',
+          onPress: () => memberActionMutation.mutate({ memberId: member.id, action }) },
+      ],
+    );
+  };
+
+  const org = data?.organization;
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'collectors', label: `Collectors (${data?.collectors.length ?? 0})` },
+    { key: 'groups',     label: `Groups (${data?.groups.length ?? 0})` },
+    { key: 'reports',    label: `Reports (${data?.recent_reports.filter(r => r.status === 'pending').length ?? 0})` },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      <LoadingOverlay visible={memberActionMutation.isPending} message="Updating…" />
+
+      {/* Header */}
+      <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary }} numberOfLines={1}>
+            {org?.name ?? 'Organisation'}
+          </Text>
+          {org && (
+            <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>
+              {org.org_type.toUpperCase()}{org.registration_number ? ` · ${org.registration_number}` : ''}
+            </Text>
+          )}
+        </View>
+        {org?.is_verified && (
+          <View style={[s.verifiedBadge, { backgroundColor: colors.successLight }]}>
+            <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+            <Text style={{ fontSize: 10, color: colors.success, fontWeight: '700', marginLeft: 3 }}>Verified</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={[s.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        {TABS.map((t) => (
+          <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} style={s.tabBtn} activeOpacity={0.8}>
+            <Text style={[s.tabLabel, { color: tab === t.key ? colors.primary : colors.textSecondary, fontWeight: tab === t.key ? '700' : '400' }]}>
+              {t.label}
+            </Text>
+            {tab === t.key && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {isError && (
+          <View style={[s.errorBanner, { backgroundColor: colors.errorLight }]}>
+            <Ionicons name="warning-outline" size={16} color={colors.error} />
+            <Text style={{ color: colors.error, fontSize: FontSize.sm, marginLeft: 8 }}>Could not load. Pull down to retry.</Text>
+          </View>
+        )}
+
+        {/* ── Collectors tab ── */}
+        {tab === 'collectors' && (
+          <>
+            <Button
+              label="+ Invite Collector"
+              onPress={() => setInvite(true)}
+              style={{ marginBottom: 16, backgroundColor: colors.primary }}
+            />
+            {(data?.collectors ?? []).map((m) => (
+              <View key={m.id} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
+                  <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
+                    {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                    {m.user.first_name} {m.user.last_name}
+                  </Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
+                  <View style={[s.pill, { backgroundColor: m.status === 'active' ? colors.successLight : colors.errorLight, marginTop: 6 }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: m.status === 'active' ? colors.success : colors.error }}>
+                      {m.status.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ gap: 6 }}>
+                  {m.status === 'active' ? (
+                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'suspend')} style={[s.miniBtn, { borderColor: '#F59E0B' }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Suspend</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'activate')} style={[s.miniBtn, { borderColor: colors.success }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Activate</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => confirmMemberAction(m, 'remove')} style={[s.miniBtn, { borderColor: colors.error }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+            {!isLoading && (data?.collectors ?? []).length === 0 && (
+              <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24, fontSize: FontSize.sm }}>
+                No collectors yet. Invite one above.
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* ── Groups tab ── */}
+        {tab === 'groups' && (
+          <>
+            {(data?.groups ?? []).map((g) => (
+              <TouchableOpacity key={g.id} onPress={() => router.push(`/thrift/${g.id}` as any)} activeOpacity={0.85}
+                style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
+                  <Ionicons name="wallet-outline" size={20} color={colors.success} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{g.name}</Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                    {g.collector.first_name} {g.collector.last_name} · {g.frequency} · {g.member_count} payers
+                  </Text>
+                  <View style={[s.pill, { backgroundColor: colors.successLight, marginTop: 6 }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>
+                      {g.cycle_type === 'fixed' ? 'FIXED CYCLE' : 'ROLLING'}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            ))}
+            {!isLoading && (data?.groups ?? []).length === 0 && (
+              <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24, fontSize: FontSize.sm }}>
+                No groups yet. Collectors create groups from their home screen.
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* ── Reports tab ── */}
+        {tab === 'reports' && (
+          <>
+            {(data?.recent_reports ?? []).map((r) => (
+              <View key={r.id} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <View style={[s.pill, { backgroundColor: `${REPORT_STATUS_COLOR[r.status]}20` }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: REPORT_STATUS_COLOR[r.status] }}>
+                      {REPORT_STATUS_LABEL[r.status] ?? r.status.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary }}>
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: FontSize.sm, color: colors.textPrimary, lineHeight: 20 }} numberOfLines={3}>
+                  {r.reason}
+                </Text>
+                {r.status === 'pending' && (
+                  <TouchableOpacity
+                    onPress={() => { setReport(r); setResolve(true); }}
+                    style={[s.miniBtn, { borderColor: colors.primary, alignSelf: 'flex-end' }]}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>Review</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+            {!isLoading && (data?.recent_reports ?? []).length === 0 && (
+              <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24, fontSize: FontSize.sm }}>
+                No reports filed yet.
+              </Text>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <InviteModal orgId={orgId} visible={inviteVisible} onClose={() => setInvite(false)} />
+      <ResolveReportModal orgId={orgId} report={selectedReport} visible={resolveVisible} onClose={() => { setResolve(false); setReport(null); }} />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
+  },
+  tabRow: {
+    flexDirection: 'row', borderBottomWidth: 1,
+  },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tabLabel: { fontSize: FontSize.xs },
+  tabUnderline: { position: 'absolute', bottom: 0, left: 8, right: 8, height: 2, borderRadius: 1 },
+  card: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderRadius: Radius.md, borderWidth: 1, marginBottom: 10,
+  },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, alignSelf: 'flex-start' },
+  miniBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm, borderWidth: 1.5 },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: Radius.md, marginBottom: 12 },
+  actionBtn: { flex: 1, padding: 10, borderRadius: Radius.sm, alignItems: 'center', minWidth: 90 },
+  actionBtnLabel: { color: '#fff', fontSize: FontSize.xs, fontWeight: '700' },
+});

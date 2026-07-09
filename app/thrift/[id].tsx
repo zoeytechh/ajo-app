@@ -1,32 +1,54 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StatusBar,
-  StyleSheet, RefreshControl, Alert, Modal, TextInput, Share,
+  StyleSheet, RefreshControl, Modal, TextInput, Share, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useAuthStore } from '../../src/store/useAppStore';
-import { thriftService, type ThriftMember, type ThriftPayment } from '../../src/services/thriftService';
+import {
+  thriftService,
+  type ThriftMember,
+  type ThriftPayment,
+} from '../../src/services/thriftService';
 import { FontSize, Radius, Shadow } from '../../src/theme';
-import { Pill, LoadingOverlay, Skeleton, feedback } from '../../src/components';
+import { LoadingOverlay, Skeleton, feedback } from '../../src/components';
 
-const FREQ_LABEL: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
-
-const STATUS_COLOR = (colors: any, s: string) => ({
-  pending:        { bg: colors.warningLight, text: colors.warning  },
-  approved:       { bg: colors.successLight, text: colors.success  },
-  rejected:       { bg: colors.errorLight,   text: colors.error    },
-  amount_pending: { bg: colors.warningLight, text: colors.warning  },
-}[s] ?? { bg: colors.primaryTint, text: colors.primary });
+const WARNING = '#F59E0B';
+const WARNING_LIGHT = '#FEF3C7';
 
 const STATUS_LABEL: Record<string, string> = {
-  pending:        'Pending',
-  approved:       'Approved',
-  rejected:       'Rejected',
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
   amount_pending: 'Amount Flagged',
 };
+
+function statusColors(colors: any, status: string) {
+  const map: Record<string, { bg: string; text: string }> = {
+    pending:        { bg: WARNING_LIGHT,        text: WARNING },
+    approved:       { bg: colors.successLight,  text: colors.success },
+    rejected:       { bg: colors.errorLight,    text: colors.error },
+    amount_pending: { bg: WARNING_LIGHT,        text: WARNING },
+  };
+  return map[status] ?? { bg: colors.primaryTint, text: colors.primary };
+}
+
+function StatusPill({ status, colors }: { status: string; colors: any }) {
+  const { bg, text } = statusColors(colors, status);
+  return (
+    <View style={[pill.wrap, { backgroundColor: bg }]}>
+      <Text style={[pill.label, { color: text }]}>{STATUS_LABEL[status] ?? status}</Text>
+    </View>
+  );
+}
+
+const pill = StyleSheet.create({
+  wrap: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
+  label: { fontSize: FontSize.xs, fontWeight: '700' },
+});
 
 // ─── Mark Payment Modal ───────────────────────────────────────────────────────
 function MarkPaymentModal({
@@ -44,10 +66,11 @@ function MarkPaymentModal({
       member_id: member!.id,
       period_date: date,
       amount: amount.trim(),
-      notes: notes.trim(),
+      notes: notes.trim() || undefined,
     }),
     onSuccess: () => {
       feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
       setAmt(''); setNotes(''); setErr('');
@@ -56,11 +79,12 @@ function MarkPaymentModal({
     onError: (e: any) => {
       feedback('error');
       const d = e.response?.data;
-      setErr(d?.detail ?? d?.amount?.[0] ?? 'Failed to mark payment.');
+      setErr(d?.detail ?? d?.amount?.[0] ?? d?.member_id?.[0] ?? 'Failed to mark payment.');
     },
   });
 
   const handleMark = () => {
+    if (!date.trim()) { setErr('Enter a period date.'); return; }
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) {
       setErr('Enter a valid amount.'); return;
     }
@@ -72,57 +96,53 @@ function MarkPaymentModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={[mStyles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={mStyles.handle} />
-          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>
-            Mark Payment
-          </Text>
-          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 20 }}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Mark Payment</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
             {member.user.first_name} {member.user.last_name} · usual ₦{Number(member.personal_amount).toLocaleString()}/period
           </Text>
 
-          <Text style={[mStyles.label, { color: colors.textSecondary }]}>Period date</Text>
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Period date</Text>
           <TextInput
             value={date}
-            onChangeText={setDate}
+            onChangeText={(v) => { setDate(v); setErr(''); }}
             placeholder="YYYY-MM-DD"
-            style={[mStyles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
             placeholderTextColor={colors.textTertiary}
           />
 
-          <Text style={[mStyles.label, { color: colors.textSecondary, marginTop: 14 }]}>Amount received (₦)</Text>
+          <Text style={[m.lbl, { color: colors.textSecondary, marginTop: 14 }]}>Amount received (₦)</Text>
           <TextInput
             value={amount}
             onChangeText={(v) => { setAmt(v.replace(/[^0-9.]/g, '')); setErr(''); }}
             placeholder={`e.g. ${Number(member.personal_amount).toLocaleString()}`}
             keyboardType="decimal-pad"
-            style={[mStyles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
             placeholderTextColor={colors.textTertiary}
           />
 
-          <Text style={[mStyles.label, { color: colors.textSecondary, marginTop: 14 }]}>Notes (optional)</Text>
+          <Text style={[m.lbl, { color: colors.textSecondary, marginTop: 14 }]}>Notes (optional)</Text>
           <TextInput
             value={notes}
             onChangeText={setNotes}
-            placeholder="Any note..."
-            style={[mStyles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 70 }]}
+            placeholder="Any note…"
             multiline
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 70 }]}
             placeholderTextColor={colors.textTertiary}
           />
 
-          {err ? <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 8 }}>{err}</Text> : null}
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 8 }}>{err}</Text>}
 
           <TouchableOpacity
             onPress={handleMark}
             disabled={mutation.isPending}
-            style={[mStyles.btn, { backgroundColor: colors.success }]}
+            style={[m.btn, { backgroundColor: colors.success, marginTop: 20 }]}
           >
-            {mutation.isPending
-              ? <Text style={{ color: '#fff', fontWeight: '700' }}>Marking…</Text>
-              : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.sm }}>Mark as Paid</Text>}
+            <Text style={m.btnText}>{mutation.isPending ? 'Marking…' : 'Mark as Paid'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={[mStyles.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
             <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -140,10 +160,12 @@ function FlagAmountModal({
   const [reason, setReason] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () => thriftService.reviewMember(groupId, member!.id, { action: 'flag_amount', reason }),
+    mutationFn: () => thriftService.reviewMember(groupId, member!.id, { action: 'flag_amount', reason: reason.trim() || undefined }),
     onSuccess: () => {
       feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
       setReason('');
       onClose();
     },
@@ -154,29 +176,30 @@ function FlagAmountModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={[mStyles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={mStyles.handle} />
-          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>Flag Amount</Text>
-          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 20 }}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Flag Amount</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
             Tell {member.user.first_name} why their amount of ₦{Number(member.personal_amount).toLocaleString()} is incorrect.
           </Text>
-          <Text style={[mStyles.label, { color: colors.textSecondary }]}>Reason (optional)</Text>
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Reason (optional)</Text>
           <TextInput
             value={reason}
             onChangeText={setReason}
             placeholder="e.g. We agreed ₦1,000 not ₦500"
             multiline
-            style={[mStyles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 80 }]}
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 80 }]}
             placeholderTextColor={colors.textTertiary}
           />
-          <TouchableOpacity onPress={() => mutation.mutate()} disabled={mutation.isPending}
-            style={[mStyles.btn, { backgroundColor: colors.warning, marginTop: 20 }]}>
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.sm }}>
-              {mutation.isPending ? 'Flagging…' : 'Flag & Notify Payer'}
-            </Text>
+          <TouchableOpacity
+            onPress={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            style={[m.btn, { backgroundColor: WARNING, marginTop: 20 }]}
+          >
+            <Text style={m.btnText}>{mutation.isPending ? 'Flagging…' : 'Flag & Notify Payer'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={[mStyles.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
             <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -185,7 +208,7 @@ function FlagAmountModal({
   );
 }
 
-// ─── Correct Amount Modal (Payer) ─────────────────────────────────────────────
+// ─── Correct Amount Modal ─────────────────────────────────────────────────────
 function CorrectAmountModal({
   visible, member, groupId, onClose,
 }: { visible: boolean; member: ThriftMember | null; groupId: number; onClose: () => void }) {
@@ -198,7 +221,9 @@ function CorrectAmountModal({
     mutationFn: () => thriftService.updateMyAmount(groupId, member!.id, amount.trim()),
     onSuccess: () => {
       feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
       setAmount(''); setErr('');
       onClose();
     },
@@ -212,37 +237,223 @@ function CorrectAmountModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={[mStyles.sheet, { backgroundColor: colors.surface }]}>
-          <View style={mStyles.handle} />
-          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 }}>Correct Your Amount</Text>
-          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 20 }}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Correct Your Amount</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
             Current: ₦{Number(member.personal_amount).toLocaleString()}/period
             {member.flag_reason ? `\nCollector's note: ${member.flag_reason}` : ''}
           </Text>
-          <Text style={[mStyles.label, { color: colors.textSecondary }]}>New contribution amount (₦)</Text>
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>New contribution amount (₦)</Text>
           <TextInput
             value={amount}
             onChangeText={(v) => { setAmount(v.replace(/[^0-9.]/g, '')); setErr(''); }}
             keyboardType="decimal-pad"
             placeholder="e.g. 1000"
-            style={[mStyles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
             placeholderTextColor={colors.textTertiary}
           />
-          {err ? <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 6 }}>{err}</Text> : null}
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 6 }}>{err}</Text>}
           <TouchableOpacity
             onPress={() => {
-              if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) { setErr('Enter a valid amount.'); return; }
+              if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) {
+                setErr('Enter a valid amount.'); return;
+              }
               mutation.mutate();
             }}
             disabled={mutation.isPending}
-            style={[mStyles.btn, { backgroundColor: colors.primary, marginTop: 20 }]}
+            style={[m.btn, { backgroundColor: colors.primary, marginTop: 20 }]}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.sm }}>
-              {mutation.isPending ? 'Submitting…' : 'Submit Correction'}
-            </Text>
+            <Text style={m.btnText}>{mutation.isPending ? 'Submitting…' : 'Submit Correction'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={[mStyles.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Report Collector Modal ───────────────────────────────────────────────────
+function ReportCollectorModal({
+  visible, groupId, onClose,
+}: { visible: boolean; groupId: number; onClose: () => void }) {
+  const { colors } = useTheme();
+  const [reason, setReason] = useState('');
+  const [err, setErr]       = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => thriftService.reportCollector(groupId, reason.trim()),
+    onSuccess: () => {
+      feedback('success');
+      setReason(''); setErr('');
+      onClose();
+    },
+    onError: (e: any) => {
+      feedback('error');
+      setErr(e.response?.data?.reason?.[0] ?? e.response?.data?.detail ?? 'Failed to submit report.');
+    },
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Report Collector</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
+            Describe your concern. This will be reviewed by our team.
+          </Text>
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Reason (min 10 characters)</Text>
+          <TextInput
+            value={reason}
+            onChangeText={(v) => { setReason(v); setErr(''); }}
+            placeholder="e.g. Collector is not recording my payments…"
+            multiline
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 100 }]}
+            placeholderTextColor={colors.textTertiary}
+          />
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 6 }}>{err}</Text>}
+          <TouchableOpacity
+            onPress={() => {
+              if (reason.trim().length < 10) { setErr('Reason must be at least 10 characters.'); return; }
+              mutation.mutate();
+            }}
+            disabled={mutation.isPending}
+            style={[m.btn, { backgroundColor: colors.error, marginTop: 20 }]}
+          >
+            <Text style={m.btnText}>{mutation.isPending ? 'Submitting…' : 'Submit Report'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── End Cycle Modal ──────────────────────────────────────────────────────────
+function EndCycleModal({
+  visible, groupId, onClose,
+}: { visible: boolean; groupId: number; onClose: () => void }) {
+  const { colors } = useTheme();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () => thriftService.endCycle(groupId),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
+      onClose();
+    },
+    onError: () => feedback('error'),
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <View style={[m.iconWrap, { backgroundColor: colors.errorLight }]}>
+            <Ionicons name="stop-circle-outline" size={32} color={colors.error} />
+          </View>
+          <Text style={[m.title, { color: colors.textPrimary, marginTop: 12 }]}>End Current Cycle?</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
+            This will mark the active cycle as completed. You can restart a new cycle afterwards.
+          </Text>
+          <TouchableOpacity
+            onPress={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            style={[m.btn, { backgroundColor: colors.error, marginTop: 20 }]}
+          >
+            <Text style={m.btnText}>{mutation.isPending ? 'Ending…' : 'End Cycle'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Restart Cycle Modal ──────────────────────────────────────────────────────
+function RestartCycleModal({
+  visible, groupId, isFixed, onClose,
+}: { visible: boolean; groupId: number; isFixed: boolean; onClose: () => void }) {
+  const { colors } = useTheme();
+  const queryClient = useQueryClient();
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate]     = useState('');
+  const [err, setErr]             = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => thriftService.restartCycle(groupId, {
+      start_date: startDate.trim() || undefined,
+      end_date: isFixed ? (endDate.trim() || null) : undefined,
+    }),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
+      setStartDate(''); setEndDate(''); setErr('');
+      onClose();
+    },
+    onError: (e: any) => {
+      feedback('error');
+      const d = e.response?.data;
+      setErr(d?.detail ?? d?.start_date?.[0] ?? d?.end_date?.[0] ?? 'Failed to restart cycle.');
+    },
+  });
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Restart Cycle</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
+            Start a new contribution cycle. Leave dates blank to use today.
+          </Text>
+
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Start date (optional)</Text>
+          <TextInput
+            value={startDate}
+            onChangeText={(v) => { setStartDate(v); setErr(''); }}
+            placeholder="YYYY-MM-DD (leave blank for today)"
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+            placeholderTextColor={colors.textTertiary}
+          />
+
+          {isFixed && (
+            <>
+              <Text style={[m.lbl, { color: colors.textSecondary, marginTop: 14 }]}>End date (optional)</Text>
+              <TextInput
+                value={endDate}
+                onChangeText={(v) => { setEndDate(v); setErr(''); }}
+                placeholder="YYYY-MM-DD"
+                style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+                placeholderTextColor={colors.textTertiary}
+              />
+            </>
+          )}
+
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 8 }}>{err}</Text>}
+
+          <TouchableOpacity
+            onPress={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            style={[m.btn, { backgroundColor: colors.success, marginTop: 20 }]}
+          >
+            <Text style={m.btnText}>{mutation.isPending ? 'Restarting…' : 'Restart Cycle'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
             <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -260,9 +471,14 @@ export default function ThriftGroupDetail() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [markTarget,  setMarkTarget]  = useState<ThriftMember | null>(null);
-  const [flagTarget,  setFlagTarget]  = useState<ThriftMember | null>(null);
-  const [correctOpen, setCorrectOpen] = useState(false);
+  const [activeTab, setActiveTab]         = useState<'pending' | 'payments'>('pending');
+  const [markTarget, setMarkTarget]       = useState<ThriftMember | null>(null);
+  const [flagTarget, setFlagTarget]       = useState<ThriftMember | null>(null);
+  const [correctOpen, setCorrectOpen]     = useState(false);
+  const [reportOpen, setReportOpen]       = useState(false);
+  const [endCycleOpen, setEndCycleOpen]   = useState(false);
+  const [restartOpen, setRestartOpen]     = useState(false);
+  const [kebabOpen, setKebabOpen]         = useState(false);
 
   const { data: group, isLoading: groupLoading } = useQuery({
     queryKey: ['thrift-group', groupId],
@@ -271,13 +487,22 @@ export default function ThriftGroupDetail() {
 
   const isCollector = group?.collector.id === user?.id;
 
-  const { data: members, isLoading: membersLoading, refetch: refetchMembers, isRefetching } = useQuery({
+  const {
+    data: members,
+    isLoading: membersLoading,
+    refetch: refetchMembers,
+    isRefetching,
+  } = useQuery({
     queryKey: ['thrift-members', groupId],
     queryFn: () => thriftService.getMembers(groupId),
     enabled: !!group,
   });
 
-  const { data: payments, isLoading: paymentsLoading, refetch: refetchPayments } = useQuery({
+  const {
+    data: payments,
+    isLoading: paymentsLoading,
+    refetch: refetchPayments,
+  } = useQuery({
     queryKey: ['thrift-payments', groupId],
     queryFn: () => thriftService.getPayments(groupId),
     enabled: !!group,
@@ -288,8 +513,9 @@ export default function ThriftGroupDetail() {
       thriftService.reviewMember(groupId, memberId, { action }),
     onSuccess: () => {
       feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['thrift-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
     },
     onError: () => feedback('error'),
   });
@@ -298,34 +524,38 @@ export default function ThriftGroupDetail() {
     mutationFn: (paymentId: number) => thriftService.unmarkPayment(groupId, paymentId),
     onSuccess: () => {
       feedback('success');
-      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
     },
     onError: () => feedback('error'),
   });
 
   const shareInvite = async () => {
     if (!group) return;
-    await Share.share({ message: `Join my thrift group "${group.name}" on Ajo!\nInvite code: ${group.invite_code}` });
+    await Share.share({
+      message: `Join my thrift group "${group.name}" on Ajo!\nInvite code: ${group.invite_code}`,
+    });
   };
 
-  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', style: 'destructive', onPress: onConfirm },
-    ]);
+  const onRefresh = () => {
+    refetchMembers();
+    refetchPayments();
   };
 
   if (groupLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color={colors.textPrimary} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
           <View style={{ width: 24 }} />
         </View>
         <View style={{ padding: 24 }}>
           <Skeleton width="60%" height={24} radius={6} style={{ marginBottom: 12 }} />
           <Skeleton width="40%" height={16} radius={4} style={{ marginBottom: 24 }} />
+          <Skeleton width="100%" height={100} radius={12} style={{ marginBottom: 12 }} />
           <Skeleton width="100%" height={80} radius={12} style={{ marginBottom: 12 }} />
           <Skeleton width="100%" height={80} radius={12} />
         </View>
@@ -335,12 +565,18 @@ export default function ThriftGroupDetail() {
 
   if (!group) return null;
 
-  // Own membership (for payer view)
-  const ownMember = members?.find((m) => m.user.id === user?.id);
-
-  // Pending members (for collector)
-  const pendingMembers  = members?.filter((m) => m.status === 'pending' || m.status === 'amount_pending') ?? [];
+  const ownMember      = members?.find((m) => m.user.id === user?.id) ?? null;
+  const pendingMembers = members?.filter((m) => m.status === 'pending' || m.status === 'amount_pending') ?? [];
   const approvedMembers = members?.filter((m) => m.status === 'approved') ?? [];
+  const cycle          = group.active_cycle;
+
+  const cycleStatusLabel = cycle
+    ? cycle.status === 'active' ? 'Active' : 'Completed'
+    : 'No active cycle';
+
+  const cycleEndLabel = cycle
+    ? cycle.end_date ? cycle.end_date : 'Open-ended'
+    : '—';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -351,205 +587,346 @@ export default function ThriftGroupDetail() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary, flex: 1, marginHorizontal: 12 }} numberOfLines={1}>
+        <Text
+          style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary, flex: 1, marginHorizontal: 12 }}
+          numberOfLines={1}
+        >
           {group.name}
         </Text>
-        {isCollector && (
+        {isCollector ? (
           <TouchableOpacity onPress={shareInvite} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
             <Ionicons name="share-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => setKebabOpen(true)} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Kebab menu for payer */}
+      <Modal visible={kebabOpen} transparent animationType="fade" onRequestClose={() => setKebabOpen(false)}>
+        <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={() => setKebabOpen(false)}>
+          <View style={[s.kebabMenu, { backgroundColor: colors.surface, ...Shadow.strong(colors.black) }]}>
+            <TouchableOpacity
+              style={s.kebabItem}
+              onPress={() => { setKebabOpen(false); setReportOpen(true); }}
+            >
+              <Ionicons name="flag-outline" size={18} color={colors.error} />
+              <Text style={{ fontSize: FontSize.sm, color: colors.error, marginLeft: 10, fontWeight: '600' }}>
+                Report Collector
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => { refetchMembers(); refetchPayments(); }} tintColor={colors.primary} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
-        {/* Group info card */}
-        <View style={[s.infoCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <View style={[s.iconBadge, { backgroundColor: colors.successLight }]}>
-              <Ionicons name="wallet" size={20} color={colors.success} />
+        {/* Organization badge */}
+        {!!group.organization && (
+          <View style={[s.orgCard, { backgroundColor: colors.surface, borderColor: colors.border, ...Shadow.card(colors.black) }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              {group.organization.logo ? (
+                <Image
+                  source={{ uri: group.organization.logo }}
+                  style={s.orgLogo}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[s.orgLogo, { backgroundColor: colors.primaryTint, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name="business-outline" size={18} color={colors.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
+                  {group.organization.name}
+                </Text>
+                <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1, textTransform: 'capitalize' }}>
+                  {group.organization.org_type}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>{group.name}</Text>
-              {!!group.description && <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 2 }}>{group.description}</Text>}
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-            <View style={s.metaRow}>
-              <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
-              <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginLeft: 4 }}>{FREQ_LABEL[group.frequency]}</Text>
-            </View>
-            <View style={s.metaRow}>
-              <Ionicons name="people-outline" size={14} color={colors.textSecondary} />
-              <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginLeft: 4 }}>{group.member_count} payers</Text>
-            </View>
-            {isCollector && (
-              <View style={s.metaRow}>
-                <Ionicons name="key-outline" size={14} color={colors.textSecondary} />
-                <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginLeft: 4, fontFamily: 'monospace' }}>{group.invite_code}</Text>
+            {group.organization.is_verified && (
+              <View style={[s.verifiedBadge, { backgroundColor: colors.successLight }]}>
+                <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 3 }}>Verified</Text>
               </View>
             )}
           </View>
+        )}
+
+        {/* Cycle info card */}
+        <View style={[s.cycleCard, { backgroundColor: colors.surface, borderColor: colors.border, ...Shadow.card(colors.black) }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="refresh-circle-outline" size={18} color={colors.primary} />
+              <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary, marginLeft: 6 }}>
+                {cycle ? `Cycle #${cycle.cycle_number}` : 'No Cycle'}
+              </Text>
+            </View>
+            {cycle && (
+              <View style={[pill.wrap, { backgroundColor: cycle.status === 'active' ? colors.successLight : colors.primaryTint }]}>
+                <Text style={[pill.label, { color: cycle.status === 'active' ? colors.success : colors.primary }]}>
+                  {cycleStatusLabel}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {cycle ? (
+            <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
+              {cycle.start_date} → {cycleEndLabel}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary }}>Start a new cycle to begin collecting.</Text>
+          )}
+
+          {isCollector && (
+            <View style={{ marginTop: 12 }}>
+              {cycle && cycle.status === 'active' ? (
+                <TouchableOpacity
+                  onPress={() => setEndCycleOpen(true)}
+                  style={[s.cycleBtn, { backgroundColor: colors.errorLight }]}
+                >
+                  <Ionicons name="stop-circle-outline" size={15} color={colors.error} />
+                  <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.error, marginLeft: 5 }}>End Cycle</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setRestartOpen(true)}
+                  style={[s.cycleBtn, { backgroundColor: colors.successLight }]}
+                >
+                  <Ionicons name="play-circle-outline" size={15} color={colors.success} />
+                  <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.success, marginLeft: 5 }}>
+                    {cycle ? 'Restart Cycle' : 'Start Cycle'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
         {/* ── COLLECTOR VIEW ── */}
         {isCollector ? (
           <>
-            {/* Pending payers */}
-            {pendingMembers.length > 0 && (
-              <>
-                <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>Awaiting Approval ({pendingMembers.length})</Text>
-                {pendingMembers.map((m) => (
-                  <View key={m.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                      <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
-                        <Text style={{ fontWeight: '800', color: colors.primary, fontSize: FontSize.sm }}>
-                          {m.user.first_name?.[0]}{m.user.last_name?.[0]}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-                          {m.user.first_name} {m.user.last_name}
-                        </Text>
-                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
-                          ₦{Number(m.personal_amount).toLocaleString()} / period
-                        </Text>
-                      </View>
-                      <Pill
-                        label={STATUS_LABEL[m.status]}
-                        bg={STATUS_COLOR(colors, m.status).bg}
-                        color={STATUS_COLOR(colors, m.status).text}
-                      />
-                    </View>
-                    {m.status === 'amount_pending' && m.flag_reason ? (
-                      <Text style={{ fontSize: FontSize.xs, color: colors.warning, marginBottom: 10 }}>
-                        Flagged: {m.flag_reason}
-                      </Text>
-                    ) : null}
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity
-                        onPress={() => reviewMutation.mutate({ memberId: m.id, action: 'approve' })}
-                        style={[s.actionBtn, { backgroundColor: colors.successLight, flex: 1 }]}
-                      >
-                        <Ionicons name="checkmark" size={16} color={colors.success} />
-                        <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.success, marginLeft: 4 }}>Approve</Text>
-                      </TouchableOpacity>
-                      {m.status === 'pending' && (
-                        <TouchableOpacity
-                          onPress={() => setFlagTarget(m)}
-                          style={[s.actionBtn, { backgroundColor: colors.warningLight, flex: 1 }]}
-                        >
-                          <Ionicons name="flag-outline" size={16} color={colors.warning} />
-                          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.warning, marginLeft: 4 }}>Flag Amount</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        onPress={() => confirmAction('Reject payer?', `Reject ${m.user.first_name}'s request?`, () => reviewMutation.mutate({ memberId: m.id, action: 'reject' }))}
-                        style={[s.actionBtn, { backgroundColor: colors.errorLight, flex: 1 }]}
-                      >
-                        <Ionicons name="close" size={16} color={colors.error} />
-                        <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.error, marginLeft: 4 }}>Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
+            {/* Tabs */}
+            <View style={[s.tabBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <TouchableOpacity
+                style={[s.tab, activeTab === 'pending' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                onPress={() => setActiveTab('pending')}
+              >
+                <Text style={[s.tabText, { color: activeTab === 'pending' ? colors.primary : colors.textSecondary }]}>
+                  Pending ({pendingMembers.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.tab, activeTab === 'payments' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                onPress={() => setActiveTab('payments')}
+              >
+                <Text style={[s.tabText, { color: activeTab === 'payments' ? colors.primary : colors.textSecondary }]}>
+                  Payments
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* Approved payers */}
-            <Text style={[s.sectionTitle, { color: colors.textPrimary, marginTop: pendingMembers.length > 0 ? 8 : 0 }]}>
-              Approved Payers ({approvedMembers.length})
-            </Text>
-            {membersLoading ? (
-              <><Skeleton width="100%" height={80} radius={12} style={{ marginBottom: 10 }} /><Skeleton width="100%" height={80} radius={12} /></>
-            ) : approvedMembers.length === 0 ? (
-              <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 }}>
-                No approved payers yet. Share the invite code to get started.
-              </Text>
-            ) : (
-              approvedMembers.map((m) => {
-                const memberPayments = payments?.filter((p) => p.member === m.id) ?? [];
-                return (
-                  <View key={m.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                      <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
-                        <Text style={{ fontWeight: '800', color: colors.success, fontSize: FontSize.sm }}>
-                          {m.user.first_name?.[0]}{m.user.last_name?.[0]}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-                          {m.user.first_name} {m.user.last_name}
-                        </Text>
-                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
-                          ₦{Number(m.personal_amount).toLocaleString()}/period · Total saved: ₦{Number(m.total_saved).toLocaleString()}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => setMarkTarget(m)}
-                        style={[s.markBtn, { backgroundColor: colors.success }]}
-                      >
-                        <Ionicons name="checkmark" size={14} color="#fff" />
-                        <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: '#fff', marginLeft: 3 }}>Mark</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {/* Recent payments */}
-                    {memberPayments.slice(0, 3).map((p) => (
-                      <View key={p.id} style={[s.paymentRow, { borderTopColor: colors.border }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                          <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 6, fontWeight: '600' }}>
-                            {p.period_date}
+            {activeTab === 'pending' ? (
+              <>
+                {membersLoading ? (
+                  <>
+                    <Skeleton width="100%" height={100} radius={12} style={{ marginBottom: 10 }} />
+                    <Skeleton width="100%" height={100} radius={12} />
+                  </>
+                ) : pendingMembers.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                    <Ionicons name="checkmark-done-circle-outline" size={48} color={colors.border} />
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center' }}>
+                      No pending requests. Share the invite code to get started.
+                    </Text>
+                  </View>
+                ) : (
+                  pendingMembers.map((mem) => (
+                    <View key={mem.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                        <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
+                          <Text style={{ fontWeight: '800', color: colors.primary, fontSize: FontSize.sm }}>
+                            {mem.user.first_name?.[0]}{mem.user.last_name?.[0]}
                           </Text>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
-                            ₦{Number(p.amount).toLocaleString()}
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                            {mem.user.first_name} {mem.user.last_name}
                           </Text>
-                          <TouchableOpacity onPress={() => confirmAction('Unmark payment?', `Remove payment for ${p.period_date}?`, () => unmarkMutation.mutate(p.id))}>
-                            <Ionicons name="trash-outline" size={14} color={colors.error} />
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                            ₦{Number(mem.personal_amount).toLocaleString()} / period
+                          </Text>
+                        </View>
+                        <StatusPill status={mem.status} colors={colors} />
+                      </View>
+
+                      {mem.status === 'amount_pending' && !!mem.flag_reason && (
+                        <View style={[s.alertBox, { backgroundColor: WARNING_LIGHT, marginBottom: 10 }]}>
+                          <Ionicons name="flag-outline" size={14} color={WARNING} />
+                          <Text style={{ flex: 1, fontSize: FontSize.xs, color: WARNING, marginLeft: 6 }}>
+                            {mem.flag_reason}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          onPress={() => reviewMutation.mutate({ memberId: mem.id, action: 'approve' })}
+                          disabled={reviewMutation.isPending}
+                          style={[s.actionBtn, { backgroundColor: colors.successLight, flex: 1 }]}
+                        >
+                          <Ionicons name="checkmark" size={15} color={colors.success} />
+                          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.success, marginLeft: 4 }}>Approve</Text>
+                        </TouchableOpacity>
+
+                        {mem.status === 'pending' && (
+                          <TouchableOpacity
+                            onPress={() => setFlagTarget(mem)}
+                            style={[s.actionBtn, { backgroundColor: WARNING_LIGHT, flex: 1 }]}
+                          >
+                            <Ionicons name="flag-outline" size={15} color={WARNING} />
+                            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: WARNING, marginLeft: 4 }}>Flag Amount</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                          onPress={() => reviewMutation.mutate({ memberId: mem.id, action: 'reject' })}
+                          disabled={reviewMutation.isPending}
+                          style={[s.actionBtn, { backgroundColor: colors.errorLight, flex: 1 }]}
+                        >
+                          <Ionicons name="close" size={15} color={colors.error} />
+                          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.error, marginLeft: 4 }}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </>
+            ) : (
+              <>
+                {membersLoading || paymentsLoading ? (
+                  <>
+                    <Skeleton width="100%" height={110} radius={12} style={{ marginBottom: 10 }} />
+                    <Skeleton width="100%" height={110} radius={12} />
+                  </>
+                ) : approvedMembers.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                    <Ionicons name="people-outline" size={48} color={colors.border} />
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center' }}>
+                      No approved payers yet.
+                    </Text>
+                  </View>
+                ) : (
+                  approvedMembers.map((mem) => {
+                    const memberPayments = (payments ?? []).filter((p) => p.member === mem.id);
+                    return (
+                      <View key={mem.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                          <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
+                            <Text style={{ fontWeight: '800', color: colors.success, fontSize: FontSize.sm }}>
+                              {mem.user.first_name?.[0]}{mem.user.last_name?.[0]}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                              {mem.user.first_name} {mem.user.last_name}
+                            </Text>
+                            <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                              Total saved: ₦{Number(mem.total_saved).toLocaleString()}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => setMarkTarget(mem)}
+                            style={[s.markBtn, { backgroundColor: colors.success }]}
+                          >
+                            <Ionicons name="checkmark" size={14} color="#fff" />
+                            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: '#fff', marginLeft: 3 }}>Mark Paid</Text>
                           </TouchableOpacity>
                         </View>
+
+                        {memberPayments.slice(0, 3).map((p) => (
+                          <View key={p.id} style={[s.paymentRow, { borderTopColor: colors.border }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <Ionicons name="checkmark-circle" size={13} color={colors.success} />
+                              <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 5, fontWeight: '600' }}>
+                                {p.period_date}
+                              </Text>
+                              {!!p.notes && (
+                                <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginLeft: 6 }} numberOfLines={1}>
+                                  · {p.notes}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
+                                ₦{Number(p.amount).toLocaleString()}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => unmarkMutation.mutate(p.id)}
+                                disabled={unmarkMutation.isPending}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Ionicons name="trash-outline" size={14} color={colors.error} />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+
+                        {memberPayments.length === 0 && (
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 8 }}>
+                            No payments marked yet.
+                          </Text>
+                        )}
                       </View>
-                    ))}
-                    {memberPayments.length === 0 && (
-                      <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 8 }}>No payments marked yet.</Text>
-                    )}
-                  </View>
-                );
-              })
+                    );
+                  })
+                )}
+              </>
             )}
           </>
         ) : (
           /* ── PAYER VIEW ── */
           <>
-            {/* Own status */}
             {ownMember && (
-              <View style={[s.infoCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>My membership</Text>
-                  <Pill
-                    label={STATUS_LABEL[ownMember.status]}
-                    bg={STATUS_COLOR(colors, ownMember.status).bg}
-                    color={STATUS_COLOR(colors, ownMember.status).text}
-                  />
+              <View style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>My Membership</Text>
+                  <StatusPill status={ownMember.status} colors={colors} />
                 </View>
-                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>
-                  Contribution: ₦{Number(ownMember.personal_amount).toLocaleString()}/{FREQ_LABEL[group.frequency].toLowerCase()}
-                </Text>
-                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 4 }}>
-                  Total saved: ₦{Number(ownMember.total_saved).toLocaleString()}
-                </Text>
+                <View style={s.metaRow}>
+                  <Ionicons name="cash-outline" size={14} color={colors.textSecondary} />
+                  <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginLeft: 6 }}>
+                    ₦{Number(ownMember.personal_amount).toLocaleString()} / period
+                  </Text>
+                </View>
+                <View style={[s.metaRow, { marginTop: 4 }]}>
+                  <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                  <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginLeft: 6 }}>
+                    Total saved: ₦{Number(ownMember.total_saved).toLocaleString()}
+                  </Text>
+                </View>
 
                 {ownMember.status === 'amount_pending' && (
                   <View style={{ marginTop: 12 }}>
-                    <View style={[s.alertBox, { backgroundColor: colors.warningLight }]}>
-                      <Ionicons name="warning-outline" size={16} color={colors.warning} />
-                      <Text style={{ flex: 1, fontSize: FontSize.xs, color: colors.warning, marginLeft: 8, lineHeight: 18 }}>
-                        The collector flagged your amount.{ownMember.flag_reason ? ` Reason: ${ownMember.flag_reason}` : ''}
+                    <View style={[s.alertBox, { backgroundColor: WARNING_LIGHT }]}>
+                      <Ionicons name="warning-outline" size={16} color={WARNING} />
+                      <Text style={{ flex: 1, fontSize: FontSize.xs, color: WARNING, marginLeft: 8, lineHeight: 18 }}>
+                        The collector flagged your contribution amount.
+                        {ownMember.flag_reason ? ` Reason: ${ownMember.flag_reason}` : ''}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -570,17 +947,30 @@ export default function ThriftGroupDetail() {
                     </Text>
                   </View>
                 )}
+
+                {ownMember.status === 'rejected' && (
+                  <View style={[s.alertBox, { backgroundColor: colors.errorLight, marginTop: 12 }]}>
+                    <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+                    <Text style={{ flex: 1, fontSize: FontSize.xs, color: colors.error, marginLeft: 8, lineHeight: 18 }}>
+                      Your membership request was rejected. Contact the collector for details.
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Payment history */}
             <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>My Payment History</Text>
+
             {paymentsLoading ? (
-              <><Skeleton width="100%" height={56} radius={10} style={{ marginBottom: 8 }} /><Skeleton width="100%" height={56} radius={10} /></>
+              <>
+                <Skeleton width="100%" height={60} radius={10} style={{ marginBottom: 8 }} />
+                <Skeleton width="100%" height={60} radius={10} style={{ marginBottom: 8 }} />
+                <Skeleton width="100%" height={60} radius={10} />
+              </>
             ) : (payments ?? []).length === 0 ? (
-              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="receipt-outline" size={48} color={colors.border} />
-                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center' }}>
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center', lineHeight: 20 }}>
                   No payments recorded yet. Once you pay and the collector marks it, it will appear here.
                 </Text>
               </View>
@@ -588,12 +978,14 @@ export default function ThriftGroupDetail() {
               (payments ?? []).map((p) => (
                 <View key={p.id} style={[s.paymentCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={[s.iconBadge, { backgroundColor: colors.successLight, width: 36, height: 36 }]}>
+                    <View style={[s.iconBadge, { backgroundColor: colors.successLight }]}>
                       <Ionicons name="checkmark" size={18} color={colors.success} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{p.period_date}</Text>
-                      {p.notes ? <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{p.notes}</Text> : null}
+                      {!!p.notes && (
+                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{p.notes}</Text>
+                      )}
                     </View>
                     <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.success }}>
                       ₦{Number(p.amount).toLocaleString()}
@@ -607,35 +999,112 @@ export default function ThriftGroupDetail() {
       </ScrollView>
 
       {/* Modals */}
-      <MarkPaymentModal  visible={!!markTarget}  member={markTarget}  groupId={groupId} onClose={() => setMarkTarget(null)} />
-      <FlagAmountModal   visible={!!flagTarget}  member={flagTarget}  groupId={groupId} onClose={() => setFlagTarget(null)} />
-      <CorrectAmountModal visible={correctOpen}  member={ownMember ?? null} groupId={groupId} onClose={() => setCorrectOpen(false)} />
+      <MarkPaymentModal
+        visible={!!markTarget}
+        member={markTarget}
+        groupId={groupId}
+        onClose={() => setMarkTarget(null)}
+      />
+      <FlagAmountModal
+        visible={!!flagTarget}
+        member={flagTarget}
+        groupId={groupId}
+        onClose={() => setFlagTarget(null)}
+      />
+      <CorrectAmountModal
+        visible={correctOpen}
+        member={ownMember}
+        groupId={groupId}
+        onClose={() => setCorrectOpen(false)}
+      />
+      <ReportCollectorModal
+        visible={reportOpen}
+        groupId={groupId}
+        onClose={() => setReportOpen(false)}
+      />
+      <EndCycleModal
+        visible={endCycleOpen}
+        groupId={groupId}
+        onClose={() => setEndCycleOpen(false)}
+      />
+      <RestartCycleModal
+        visible={restartOpen}
+        groupId={groupId}
+        isFixed={group.cycle_type === 'fixed'}
+        onClose={() => setRestartOpen(false)}
+      />
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
-  infoCard: { borderRadius: Radius.lg, padding: 16, marginBottom: 20 },
-  iconBadge: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  metaRow: { flexDirection: 'row', alignItems: 'center' },
+  orgCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: Radius.lg, borderWidth: 1, padding: 12, marginBottom: 12,
+  },
+  orgLogo: { width: 36, height: 36, borderRadius: 8 },
+  verifiedBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.full,
+  },
+  cycleCard: {
+    borderRadius: Radius.lg, borderWidth: 1, padding: 14, marginBottom: 16,
+  },
+  cycleBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.md, alignSelf: 'flex-start',
+  },
+  tabBar: {
+    flexDirection: 'row', borderWidth: 1, borderRadius: Radius.lg,
+    marginBottom: 16, overflow: 'hidden',
+  },
+  tab: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+  },
+  tabText: { fontSize: FontSize.sm, fontWeight: '700' },
   sectionTitle: { fontSize: FontSize.md, fontWeight: '700', marginBottom: 12, marginTop: 4 },
   memberCard: { borderRadius: Radius.lg, padding: 14, marginBottom: 10 },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.md },
-  markBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderRadius: Radius.md },
-  paymentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, paddingTop: 8, marginTop: 8 },
+  actionBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.md,
+  },
+  markBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: Radius.md,
+  },
+  paymentRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderTopWidth: 1, paddingTop: 8, marginTop: 8,
+  },
   paymentCard: { borderRadius: Radius.md, padding: 14, marginBottom: 8 },
   alertBox: { flexDirection: 'row', alignItems: 'flex-start', padding: 10, borderRadius: Radius.md },
+  metaRow: { flexDirection: 'row', alignItems: 'center' },
+  iconBadge: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  kebabMenu: {
+    position: 'absolute', top: 100, right: 20,
+    borderRadius: Radius.md, paddingVertical: 4, minWidth: 180,
+  },
+  kebabItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, paddingHorizontal: 16,
+  },
 });
 
-const mStyles = StyleSheet.create({
+const m = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { padding: 24, paddingBottom: 40, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#ccc', alignSelf: 'center', marginBottom: 20 },
-  label: { fontSize: FontSize.xs, fontWeight: '600', marginBottom: 6 },
+  title: { fontSize: FontSize.lg, fontWeight: '800', marginBottom: 4 },
+  sub: { fontSize: FontSize.sm, marginBottom: 20, lineHeight: 20 },
+  lbl: { fontSize: FontSize.xs, fontWeight: '600', marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: Radius.md, padding: 12, fontSize: FontSize.sm },
   btn: { padding: 14, borderRadius: Radius.md, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.sm },
+  iconWrap: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
 });

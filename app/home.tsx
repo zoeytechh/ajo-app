@@ -300,20 +300,36 @@ export default function HomeRoute() {
               </View>
             )}
             {!isLoading && !thriftError && (
-              <TouchableOpacity
-                onPress={() => requirePhoto(() => router.push('/thrift/join' as any))}
-                style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                activeOpacity={0.82}
-              >
-                <View style={[s.joinCodeIcon, { backgroundColor: colors.successLight }]}>
-                  <Ionicons name="key-outline" size={20} color={colors.success} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Join a Contribution Group</Text>
-                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>Enter the invite code from your collector</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  onPress={() => requirePhoto(() => router.push('/thrift/join' as any))}
+                  style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  activeOpacity={0.82}
+                >
+                  <View style={[s.joinCodeIcon, { backgroundColor: colors.successLight }]}>
+                    <Ionicons name="key-outline" size={20} color={colors.success} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Join a Contribution Group</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>Enter the invite code from your collector</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push('/thrift/org/create' as any)}
+                  style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
+                  activeOpacity={0.82}
+                >
+                  <View style={[s.joinCodeIcon, { backgroundColor: colors.primaryTint }]}>
+                    <Ionicons name="business-outline" size={20} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Manage as Organisation</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>Banks, MFBs and cooperatives — create your org</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              </>
             )}
           </>
         )}

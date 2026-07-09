@@ -7,9 +7,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
-import { useAuthStore } from '../../../src/store/useAppStore';
 import { thriftService, type ThriftOrgMember, type CollectorReport } from '../../../src/services/thriftService';
-import { FontSize, Radius, Shadow } from '../../../src/theme';
+import { FontSize, Radius } from '../../../src/theme';
 import { Button, Input, LoadingOverlay, feedback } from '../../../src/components';
 
 type Tab = 'collectors' | 'groups' | 'reports';
@@ -71,7 +70,7 @@ function InviteModal({ orgId, visible, onClose }: { orgId: number; visible: bool
             leftIcon={<Ionicons name="mail-outline" size={18} color={colors.primary} />}
           />
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-            <Button label="Cancel" onPress={onClose} style={{ flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }} labelStyle={{ color: colors.textPrimary }} />
+            <Button label="Cancel" onPress={onClose} variant="outline" style={{ flex: 1 }} />
             <Button label="Send Invite" onPress={() => mutation.mutate()} loading={mutation.isPending} disabled={!email.trim()} style={{ flex: 1 }} />
           </View>
         </View>
@@ -88,17 +87,6 @@ function ResolveReportModal({
   const { colors } = useTheme();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState('');
-
-  const mutate = (action: 'resolve' | 'dismiss' | 'review') => useMutation({
-    mutationFn: () => thriftService.resolveReport(orgId, report!.id, action, notes),
-    onSuccess: () => {
-      feedback('success');
-      queryClient.invalidateQueries({ queryKey: ['thrift-org', orgId] });
-      setNotes('');
-      onClose();
-    },
-    onError: () => feedback('error'),
-  });
 
   const resolveMutation = useMutation({
     mutationFn: (action: 'resolve' | 'dismiss' | 'review') =>
@@ -158,7 +146,6 @@ export default function OrgDashboardRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const orgId  = Number(id);
   const { colors, isDark } = useTheme();
-  const { user } = useAuthStore();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -173,7 +160,7 @@ export default function OrgDashboardRoute() {
   });
 
   const memberActionMutation = useMutation({
-    mutationFn: ({ memberId, action }: { memberId: number; action: 'suspend' | 'activate' | 'remove' }) =>
+    mutationFn: ({ memberId, action }: { memberId: number; action: 'approve' | 'suspend' | 'activate' | 'reject' | 'remove' }) =>
       thriftService.orgMemberAction(orgId, memberId, action),
     onSuccess: () => {
       feedback('success');
@@ -182,14 +169,15 @@ export default function OrgDashboardRoute() {
     onError: () => feedback('error'),
   });
 
-  const confirmMemberAction = (member: ThriftOrgMember, action: 'suspend' | 'activate' | 'remove') => {
-    const labels = { suspend: 'Suspend', activate: 'Reactivate', remove: 'Remove' };
+  const confirmMemberAction = (member: ThriftOrgMember, action: 'approve' | 'suspend' | 'activate' | 'reject' | 'remove') => {
+    const labels = { approve: 'Approve', suspend: 'Suspend', activate: 'Reactivate', reject: 'Reject', remove: 'Remove' };
+    const destructive = action === 'remove' || action === 'reject';
     Alert.alert(
       `${labels[action]} Collector`,
       `${labels[action]} ${member.user.first_name} ${member.user.last_name}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: labels[action], style: action === 'remove' ? 'destructive' : 'default',
+        { text: labels[action], style: destructive ? 'destructive' : 'default',
           onPress: () => memberActionMutation.mutate({ memberId: member.id, action }) },
       ],
     );
@@ -197,8 +185,10 @@ export default function OrgDashboardRoute() {
 
   const org = data?.organization;
 
+  const pendingCount = data?.pending_collectors?.length ?? 0;
+
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'collectors', label: `Collectors (${data?.collectors.length ?? 0})` },
+    { key: 'collectors', label: `Collectors (${data?.collectors.length ?? 0})${pendingCount ? ` · ${pendingCount} pending` : ''}` },
     { key: 'groups',     label: `Groups (${data?.groups.length ?? 0})` },
     { key: 'reports',    label: `Reports (${data?.recent_reports.filter(r => r.status === 'pending').length ?? 0})` },
   ];
@@ -263,6 +253,53 @@ export default function OrgDashboardRoute() {
               onPress={() => setInvite(true)}
               style={{ marginBottom: 16, backgroundColor: colors.primary }}
             />
+
+            {/* Pending approval */}
+            {(data?.pending_collectors ?? []).length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                  <Text style={{ fontSize: FontSize.xs, color: '#F59E0B', fontWeight: '700', marginHorizontal: 10 }}>
+                    PENDING APPROVAL
+                  </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                </View>
+                {(data?.pending_collectors ?? []).map((m) => (
+                  <View key={m.id} style={[s.card, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                    <View style={[s.avatar, { backgroundColor: '#FEF3C7' }]}>
+                      <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: '#D97706' }}>
+                        {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                        {m.user.first_name} {m.user.last_name}
+                      </Text>
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
+                      <View style={[s.pill, { backgroundColor: '#FDE68A', marginTop: 6 }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#92400E' }}>AWAITING APPROVAL</Text>
+                      </View>
+                    </View>
+                    <View style={{ gap: 6 }}>
+                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'approve')} style={[s.miniBtn, { borderColor: colors.success }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'reject')} style={[s.miniBtn, { borderColor: colors.error }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '700', marginHorizontal: 10 }}>
+                    ACTIVE
+                  </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                </View>
+              </>
+            )}
+
             {(data?.collectors ?? []).map((m) => (
               <View key={m.id} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>

@@ -60,13 +60,14 @@ const AuthHeader: React.FC<{ title: string; subtitle: string; showLogo?: boolean
 // REGISTER SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 interface RegisterProps {
-  onSuccess: (email: string, phone: string) => void;
+  onSuccess: (email: string, phone: string, isOrg: boolean) => void;
   onLogin: () => void;
 }
 
 export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) => {
   const { colors, isDark } = useTheme();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+  const [accountType, setAccountType] = useState<'individual' | 'org'>('individual');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,7 +105,7 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
         device_id,
       });
       feedback('success');
-      onSuccess(form.email, form.phone);
+      onSuccess(form.email, form.phone, accountType === 'org');
     } catch (err: any) {
       feedback('error');
       const data = err.response?.data;
@@ -147,6 +148,49 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
             <Text style={{ color: colors.error, fontSize: FontSize.sm, fontWeight: '500' }}>⚠️  {serverError}</Text>
           </View>
         ) : null}
+
+        {/* Account type selector */}
+        <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary, marginBottom: 10 }}>
+          I am registering as
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          <TouchableOpacity
+            onPress={() => setAccountType('individual')}
+            activeOpacity={0.8}
+            style={{
+              flex: 1, padding: 14, borderRadius: 12, borderWidth: 1.5,
+              alignItems: 'center',
+              backgroundColor: accountType === 'individual' ? colors.primaryTint : colors.surface,
+              borderColor: accountType === 'individual' ? colors.primary : colors.border,
+            }}
+          >
+            <Ionicons name="person-outline" size={22} color={accountType === 'individual' ? colors.primary : colors.textSecondary} />
+            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: accountType === 'individual' ? colors.primary : colors.textPrimary, marginTop: 6 }}>
+              Individual
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2, textAlign: 'center' }}>
+              Saver, collector, or payer
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setAccountType('org')}
+            activeOpacity={0.8}
+            style={{
+              flex: 1, padding: 14, borderRadius: 12, borderWidth: 1.5,
+              alignItems: 'center',
+              backgroundColor: accountType === 'org' ? colors.primaryTint : colors.surface,
+              borderColor: accountType === 'org' ? colors.primary : colors.border,
+            }}
+          >
+            <Ionicons name="business-outline" size={22} color={accountType === 'org' ? colors.primary : colors.textSecondary} />
+            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: accountType === 'org' ? colors.primary : colors.textPrimary, marginTop: 6 }}>
+              Organisation
+            </Text>
+            <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2, textAlign: 'center' }}>
+              MFB, cooperative, or bank
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <Input
           label="Full Name" placeholder="Ada Okonkwo" value={form.name}

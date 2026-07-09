@@ -142,6 +142,12 @@ export default function HomeRoute() {
     queryFn: thriftService.getGroups,
   });
 
+  const { data: myOrgs } = useQuery({
+    queryKey: ['thrift-orgs'],
+    queryFn: thriftService.getOrgs,
+    select: (orgs) => orgs.filter((o) => o.owner?.id === user?.id),
+  });
+
   const handleLogout = () => { logout(); router.replace('/login'); };
 
   const requirePhoto = (action: () => void) => {
@@ -315,20 +321,36 @@ export default function HomeRoute() {
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push('/thrift/org/create' as any)}
-                  style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 10 }]}
-                  activeOpacity={0.82}
-                >
-                  <View style={[s.joinCodeIcon, { backgroundColor: colors.primaryTint }]}>
-                    <Ionicons name="business-outline" size={20} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Manage as Organisation</Text>
-                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>Banks, MFBs and cooperatives — create your org</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                </TouchableOpacity>
+                {(myOrgs ?? []).length > 0 && (
+                  <>
+                    <View style={[s.sectionDivider, { marginTop: 16 }]} />
+                    <SectionTitle label={(myOrgs ?? []).length === 1 ? 'My Organisation' : 'My Organisations'} />
+                    {(myOrgs ?? []).map((org) => (
+                      <TouchableOpacity
+                        key={org.id}
+                        onPress={() => router.push(`/thrift/org/${org.id}` as any)}
+                        style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                        activeOpacity={0.82}
+                      >
+                        <View style={[s.joinCodeIcon, { backgroundColor: colors.primaryTint }]}>
+                          <Ionicons name="business-outline" size={20} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 14 }}>
+                          <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
+                            {org.name}
+                          </Text>
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                            {org.org_type.toUpperCase()}{org.is_verified ? ' · Verified' : ''}
+                          </Text>
+                        </View>
+                        {org.is_verified && (
+                          <Ionicons name="shield-checkmark" size={16} color={colors.primary} style={{ marginRight: 6 }} />
+                        )}
+                        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
               </>
             )}
           </>

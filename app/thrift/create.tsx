@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import {
   View, Text, StatusBar, KeyboardAvoidingView,
-  Platform, TouchableOpacity, StyleSheet, ScrollView,
+  Platform, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
-import { thriftService, type ThriftFrequency, type ThriftCycleType } from '../../src/services/thriftService';
+import { thriftService, type ThriftFrequency, type ThriftCycleType, type ThriftOrganization } from '../../src/services/thriftService';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import { Button, Input, LoadingOverlay, feedback } from '../../src/components';
 
@@ -24,25 +25,36 @@ const CYCLE_TYPES: { value: ThriftCycleType; label: string; desc: string; icon: 
 
 export default function CreateThriftRoute() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [name, setName]           = useState('');
-  const [description, setDesc]    = useState('');
-  const [frequency, setFrequency] = useState<ThriftFrequency>('daily');
-  const [cycleType, setCycleType] = useState<ThriftCycleType>('rolling');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate]     = useState('');
-  const [errors, setErrors]       = useState<Record<string, string>>({});
+  const [name, setName]               = useState('');
+  const [description, setDesc]        = useState('');
+  const [frequency, setFrequency]     = useState<ThriftFrequency>('daily');
+  const [cycleType, setCycleType]     = useState<ThriftCycleType>('rolling');
+  const [startDate, setStartDate]     = useState('');
+  const [endDate, setEndDate]         = useState('');
+  const [selectedOrgId, setOrgId]     = useState<number | null>(null);
+  const [inviteToken, setInviteToken] = useState('');
+  const [errors, setErrors]           = useState<Record<string, string>>({});
+
+  const { data: partnerOrgs, isLoading: orgsLoading } = useQuery<ThriftOrganization[]>({
+    queryKey: ['partner-orgs'],
+    queryFn: thriftService.getPartnerOrgs,
+    staleTime: 10 * 60 * 1000,
+  });
 
   const mutation = useMutation({
     mutationFn: () => thriftService.createGroup({
       name: name.trim(),
       description: description.trim(),
       frequency,
-      cycle_type: cycleType,
-      start_date: cycleType === 'fixed' ? startDate || null : null,
-      end_date:   cycleType === 'fixed' ? endDate   || null : null,
+      cycle_type:  cycleType,
+      start_date:  cycleType === 'fixed' ? startDate || null : null,
+      end_date:    cycleType === 'fixed' ? endDate   || null : null,
+      org_id:      selectedOrgId,
+      invite_token: selectedOrgId ? inviteToken.trim() || null : null,
     }),
     onSuccess: (group) => {
       feedback('success');
@@ -53,10 +65,11 @@ export default function CreateThriftRoute() {
       feedback('error');
       const d = err.response?.data ?? {};
       setErrors({
-        name:       d.name?.[0]       ?? '',
-        start_date: d.start_date?.[0] ?? d.start_date ?? '',
-        end_date:   d.end_date?.[0]   ?? d.end_date   ?? '',
-        general:    d.detail ?? d.non_field_errors?.[0] ?? 'Something went wrong.',
+        name:         d.name?.[0]         ?? '',
+        start_date:   d.start_date?.[0]   ?? d.start_date   ?? '',
+        end_date:     d.end_date?.[0]     ?? d.end_date     ?? '',
+        invite_token: d.invite_token?.[0] ?? d.invite_token ?? '',
+        general:      d.detail ?? d.non_field_errors?.[0] ?? '',
       });
     },
   });
@@ -169,12 +182,78 @@ export default function CreateThriftRoute() {
           </View>
         )}
 
+        {/* Organisation affiliation */}
+        <Text style={[s.label, { color: colors.textPrimary, marginTop: 24 }]}>Organisation affiliation <Text style={{ fontWeight: '400', color: colors.textSecondary }}>(optional)</Text></Text>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginBottom: 12 }}>
+          Tap to select if you collect on behalf of a partner organisation. Leave blank if you're independent.
+        </Text>
+
+        {/* Partner orgs list — tap to select, tap again to deselect */}
+        {orgsLoading ? (
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
+        ) : (partnerOrgs ?? []).map((org) => {
+          const active = selectedOrgId === org.id;
+          return (
+            <TouchableOpacity
+              key={org.id}
+              onPress={() => {
+                if (active) {
+                  setOrgId(null);
+                  setInviteToken('');
+                  setErrors((p) => ({ ...p, invite_token: '' }));
+                } else {
+                  setOrgId(org.id);
+                  setInviteToken('');
+                  setErrors((p) => ({ ...p, invite_token: '' }));
+                }
+              }}
+              activeOpacity={0.8}
+              style={[s.optionRow, { backgroundColor: active ? colors.primaryTint : colors.surface, borderColor: active ? colors.primary : colors.border, ...Shadow.card(colors.black) }]}
+            >
+              <View style={[s.orgIcon, { backgroundColor: active ? colors.primary : colors.border }]}>
+                <Ionicons name="business-outline" size={14} color={colors.white} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: active ? colors.primary : colors.textPrimary }}>{org.name}</Text>
+                {org.registration_number ? (
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>RC {org.registration_number}</Text>
+                ) : null}
+              </View>
+              {org.is_verified && (
+                <Ionicons name="shield-checkmark" size={16} color={active ? colors.primary : colors.textSecondary} style={{ marginRight: 4 }} />
+              )}
+              {active && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Invite token — required when an org is selected */}
+        {selectedOrgId !== null && (
+          <View style={{ marginTop: 16 }}>
+            <Input
+              label="Organisation invite token"
+              placeholder="Paste the token sent to you by the org admin"
+              value={inviteToken}
+              onChangeText={(v) => { setInviteToken(v); setErrors((p) => ({ ...p, invite_token: '' })); }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={errors.invite_token}
+              leftIcon={<Ionicons name="key-outline" size={18} color={colors.primary} />}
+            />
+            <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 6, lineHeight: 18 }}>
+              The admin of this organisation must invite you first. If you haven't received a token, contact them.
+            </Text>
+          </View>
+        )}
+
         {errors.general ? (
           <Text style={{ color: colors.error, fontSize: FontSize.sm, marginTop: 12, textAlign: 'center' }}>{errors.general}</Text>
         ) : null}
 
-        <Button label="Create Group" onPress={handleSubmit} loading={mutation.isPending} style={{ marginTop: 32, backgroundColor: colors.success }} />
-        <View style={{ height: 40 }} />
+        <View style={{ height: 1, backgroundColor: colors.border, marginTop: 24, marginBottom: 20 }} />
+
+        <Button label="Create Group" onPress={handleSubmit} loading={mutation.isPending} style={{ backgroundColor: colors.success }} />
+        <View style={{ height: insets.bottom + 120 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -192,4 +271,5 @@ const s = StyleSheet.create({
     padding: 14, borderRadius: Radius.md, borderWidth: 1.5, marginBottom: 10,
   },
   dot: { width: 18, height: 18, borderRadius: 9 },
+  orgIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

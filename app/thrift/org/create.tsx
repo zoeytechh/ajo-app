@@ -3,6 +3,7 @@ import {
   View, Text, StatusBar, KeyboardAvoidingView,
   Platform, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ const ORG_TYPES: { value: OrgType; label: string; desc: string }[] = [
 
 export default function CreateOrgRoute() {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -113,7 +115,7 @@ export default function CreateOrgRoute() {
         ) : null}
 
         <Button label="Create Organisation" onPress={handleSubmit} loading={mutation.isPending} style={{ marginTop: 32 }} />
-        <View style={{ height: 40 }} />
+        <View style={{ height: insets.bottom + 80 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -17,9 +17,11 @@ export interface ThriftOrganization {
   name: string;
   org_type: OrgType;
   logo: string | null;
+  logo_url: string;
   registration_number: string;
   is_verified: boolean;
-  owner: AjoUser;
+  is_platform_partner: boolean;
+  owner: AjoUser | null;
   member_count: number;
   created_at: string;
 }
@@ -120,6 +122,8 @@ export const thriftService = {
     cycle_type: ThriftCycleType;
     start_date?: string | null;
     end_date?: string | null;
+    org_id?: number | null;
+    invite_token?: string | null;
   }): Promise<ThriftGroup> => {
     const { data } = await api.post('/api/thrift/', payload);
     return data;
@@ -200,6 +204,11 @@ export const thriftService = {
   },
 
   // ── Organisations ────────────────────────────────────────────────────────────
+  getPartnerOrgs: async (): Promise<ThriftOrganization[]> => {
+    const { data } = await api.get('/api/thrift/orgs/partners/');
+    return data;
+  },
+
   getOrgs: async (): Promise<ThriftOrganization[]> => {
     const { data } = await api.get('/api/thrift/orgs/');
     return data;
@@ -247,8 +256,8 @@ export const thriftService = {
     return data;
   },
 
-  orgMemberAction: async (orgId: number, memberId: number, action: 'suspend' | 'activate' | 'remove'): Promise<ThriftOrgMember | void> => {
-    if (action === 'remove') {
+  orgMemberAction: async (orgId: number, memberId: number, action: 'approve' | 'suspend' | 'activate' | 'reject' | 'remove'): Promise<ThriftOrgMember | void> => {
+    if (action === 'remove' || action === 'reject') {
       await api.patch(`/api/thrift/orgs/${orgId}/members/${memberId}/`, { action });
       return;
     }
@@ -259,6 +268,7 @@ export const thriftService = {
   getOrgDashboard: async (orgId: number): Promise<{
     organization: ThriftOrganization;
     collectors: ThriftOrgMember[];
+    pending_collectors: ThriftOrgMember[];
     groups: ThriftGroup[];
     recent_reports: CollectorReport[];
   }> => {

@@ -202,7 +202,7 @@ export default function HomeRoute() {
         {(['ajo', 'thrift'] as const).map((t) => (
           <TouchableOpacity key={t} onPress={() => setTab(t)} style={s.tabBtn} activeOpacity={0.8}>
             <Text style={[s.tabLabel, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '400' }]}>
-              {t === 'ajo' ? 'Ajo Groups' : 'Thrift'}
+              {t === 'ajo' ? 'Ajo Groups' : 'Contributions'}
             </Text>
             {tab === t && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
           </TouchableOpacity>
@@ -275,7 +275,7 @@ export default function HomeRoute() {
           <>
             {myThriftGroups.length > 0 && (
               <>
-                <SectionTitle label="My Thrift Groups" />
+                <SectionTitle label="My Contribution Groups" />
                 {myThriftGroups.map((g) => (
                   <ThriftCard key={g.id} group={g} isCollector onPress={() => router.push(`/thrift/${g.id}` as any)} />
                 ))}
@@ -284,7 +284,7 @@ export default function HomeRoute() {
             {joinedThriftGroups.length > 0 && (
               <>
                 {myThriftGroups.length > 0 && <View style={s.sectionDivider} />}
-                <SectionTitle label="Thrift Groups I've Joined" />
+                <SectionTitle label="Contributions I've Joined" />
                 {joinedThriftGroups.map((g) => (
                   <ThriftCard key={g.id} group={g} isCollector={false} onPress={() => router.push(`/thrift/${g.id}` as any)} />
                 ))}
@@ -293,9 +293,9 @@ export default function HomeRoute() {
             {myThriftGroups.length === 0 && joinedThriftGroups.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="wallet-outline" size={64} color={colors.successLight} />
-                <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 16, textAlign: 'center' }}>No thrift groups yet</Text>
+                <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 16, textAlign: 'center' }}>No contribution groups yet</Text>
                 <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>
-                  Create a thrift group to start collecting, or join one with an invite code from your collector.
+                  Create a contribution group to start collecting, or join one with an invite code from your collector.
                 </Text>
               </View>
             )}
@@ -309,7 +309,7 @@ export default function HomeRoute() {
                   <Ionicons name="key-outline" size={20} color={colors.success} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Join a Thrift Group</Text>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>Join a Contribution Group</Text>
                   <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>Enter the invite code from your collector</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />

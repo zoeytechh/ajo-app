@@ -290,7 +290,7 @@ export default function HomeRoute() {
                 ))}
               </>
             )}
-            {myThriftGroups.length === 0 && joinedThriftGroups.length === 0 && (
+            {!thriftError && myThriftGroups.length === 0 && joinedThriftGroups.length === 0 && (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                 <Ionicons name="wallet-outline" size={64} color={colors.successLight} />
                 <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 16, textAlign: 'center' }}>No contribution groups yet</Text>
@@ -299,7 +299,7 @@ export default function HomeRoute() {
                 </Text>
               </View>
             )}
-            {!isLoading && (
+            {!isLoading && !thriftError && (
               <TouchableOpacity
                 onPress={() => requirePhoto(() => router.push('/thrift/join' as any))}
                 style={[s.joinCodeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}

@@ -14,16 +14,31 @@ import { Skeleton } from '../src/components';
 // ─── Icon by notification type ─────────────────────────────────────────────────
 function typeIcon(type: string, colors: any): { name: any; color: string; bg: string } {
   switch (type) {
-    case 'payment_approved':  return { name: 'checkmark-circle', color: colors.successDark, bg: colors.successLight };
-    case 'payment_rejected':  return { name: 'close-circle',     color: colors.errorDark,   bg: colors.errorLight   };
-    case 'payment_submitted': return { name: 'receipt',          color: colors.primary,     bg: colors.primaryTint  };
-    case 'join_approved':     return { name: 'person-add',       color: colors.successDark, bg: colors.successLight };
-    case 'join_rejected':     return { name: 'person-remove',    color: colors.errorDark,   bg: colors.errorLight   };
-    case 'member_joined':     return { name: 'people',           color: colors.primary,     bg: colors.primaryTint  };
-    case 'removal_vote':      return { name: 'alert-circle',     color: colors.warningDark, bg: colors.warningLight };
-    case 'cycle_closed':      return { name: 'lock-closed',      color: colors.textSecondary, bg: colors.border     };
-    case 'cycle_early_close': return { name: 'timer',            color: colors.warningDark, bg: colors.warningLight };
-    default:                  return { name: 'notifications',    color: colors.primary,     bg: colors.primaryTint  };
+    // ── Ajo group ──
+    case 'payment_approved':  return { name: 'checkmark-circle', color: colors.successDark,   bg: colors.successLight };
+    case 'payment_rejected':  return { name: 'close-circle',     color: colors.errorDark,     bg: colors.errorLight   };
+    case 'payment_submitted': return { name: 'receipt',          color: colors.primary,       bg: colors.primaryTint  };
+    case 'join_approved':     return { name: 'person-add',       color: colors.successDark,   bg: colors.successLight };
+    case 'join_rejected':     return { name: 'person-remove',    color: colors.errorDark,     bg: colors.errorLight   };
+    case 'member_joined':     return { name: 'people',           color: colors.primary,       bg: colors.primaryTint  };
+    case 'removal_vote':      return { name: 'alert-circle',     color: colors.warningDark,   bg: colors.warningLight };
+    case 'cycle_closed':      return { name: 'lock-closed',      color: colors.textSecondary, bg: colors.border       };
+    case 'cycle_early_close': return { name: 'timer',            color: colors.warningDark,   bg: colors.warningLight };
+    // ── Contributions (thrift) ──
+    case 'thrift_join_approved':     return { name: 'checkmark-circle',      color: colors.successDark, bg: colors.successLight };
+    case 'thrift_join_rejected':     return { name: 'close-circle',          color: colors.errorDark,   bg: colors.errorLight   };
+    case 'thrift_member_joined':     return { name: 'person-add',            color: colors.primary,     bg: colors.primaryTint  };
+    case 'thrift_amount_flagged':    return { name: 'flag',                  color: colors.warningDark, bg: colors.warningLight };
+    case 'thrift_amount_updated':    return { name: 'create',                color: colors.primary,     bg: colors.primaryTint  };
+    case 'thrift_payment_marked':    return { name: 'wallet',                color: colors.successDark, bg: colors.successLight };
+    case 'thrift_payment_confirmed': return { name: 'checkmark-done-circle', color: colors.successDark, bg: colors.successLight };
+    case 'thrift_payment_disputed':  return { name: 'alert-circle',          color: colors.warningDark, bg: colors.warningLight };
+    case 'thrift_dispute_escalated': return { name: 'warning',               color: colors.errorDark,   bg: colors.errorLight   };
+    case 'thrift_cycle_ended':       return { name: 'stop-circle',           color: colors.errorDark,   bg: colors.errorLight   };
+    case 'thrift_cycle_restarted':   return { name: 'play-circle',           color: colors.successDark, bg: colors.successLight };
+    case 'thrift_org_invite':        return { name: 'business',              color: colors.primary,     bg: colors.primaryTint  };
+    case 'thrift_collector_report':  return { name: 'shield-outline',        color: colors.warningDark, bg: colors.warningLight };
+    default:                         return { name: 'notifications',         color: colors.primary,     bg: colors.primaryTint  };
   }
 }
 
@@ -106,8 +121,10 @@ export default function NotificationsRoute() {
 
   const handlePress = (notif: AppNotification) => {
     if (!notif.is_read) markReadMutation.mutate(notif.id);
-    const groupId = notif.action_data?.group_id;
-    if (groupId) router.push(`/group/${groupId}` as any);
+    const thriftGroupId = notif.action_data?.thrift_group_id;
+    const groupId       = notif.action_data?.group_id;
+    if (thriftGroupId) router.push(`/thrift/${thriftGroupId}` as any);
+    else if (groupId)  router.push(`/group/${groupId}` as any);
   };
 
   return (
@@ -152,7 +169,7 @@ export default function NotificationsRoute() {
               No notifications yet
             </Text>
             <Text style={{ fontSize: FontSize.sm, color: colors.textTertiary, marginTop: 6, textAlign: 'center' }}>
-              Payment approvals, cycle updates, and group alerts will appear here.
+              Payment updates, collector activity, cycle changes, and org alerts will appear here.
             </Text>
           </View>
         ) : (

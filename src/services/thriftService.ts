@@ -64,6 +64,7 @@ export interface ThriftGroup {
   subscription_expires: string | null;
   active_cycle: ThriftCycle | null;
   created_at: string;
+  is_org_admin?: boolean;
 }
 
 export interface ThriftMember {

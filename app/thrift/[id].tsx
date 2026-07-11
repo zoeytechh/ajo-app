@@ -638,6 +638,7 @@ export default function ThriftGroupDetail() {
 
   if (!group) return null;
 
+  const isOrgAdmin     = !!group.is_org_admin;
   const ownMember      = members?.find((m) => m.user.id === user?.id) ?? null;
   const pendingMembers = members?.filter((m) => m.status === 'pending' || m.status === 'amount_pending') ?? [];
   const approvedMembers = members?.filter((m) => m.status === 'approved') ?? [];
@@ -666,7 +667,9 @@ export default function ThriftGroupDetail() {
         >
           {group.name}
         </Text>
-        {isCollector ? (
+        {isOrgAdmin ? (
+          <View style={{ width: 22 }} />
+        ) : isCollector ? (
           <TouchableOpacity onPress={shareInvite} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
             <Ionicons name="share-outline" size={22} color={colors.primary} />
           </TouchableOpacity>
@@ -790,8 +793,82 @@ export default function ThriftGroupDetail() {
           )}
         </View>
 
-        {/* ── COLLECTOR VIEW ── */}
-        {isCollector ? (
+        {/* ── ORG ADMIN VIEW (read-only oversight) ── */}
+        {isOrgAdmin ? (
+          <>
+            <View style={[s.tabBar, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 }]}>
+              <View style={{ flex: 1, paddingVertical: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+                <Ionicons name="shield-checkmark-outline" size={15} color={colors.primary} />
+                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.primary, marginLeft: 6 }}>
+                  Organisation Oversight
+                </Text>
+              </View>
+            </View>
+
+            {membersLoading || paymentsLoading ? (
+              <>
+                <Skeleton width="100%" height={110} radius={12} style={{ marginBottom: 10 }} />
+                <Skeleton width="100%" height={110} radius={12} />
+              </>
+            ) : approvedMembers.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="people-outline" size={48} color={colors.border} />
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center' }}>
+                  No approved payers yet.
+                </Text>
+              </View>
+            ) : (
+              approvedMembers.map((mem) => {
+                const memberPayments = (payments ?? []).filter((p) => p.member === mem.id);
+                const lastPayment = memberPayments[0] ?? null;
+                return (
+                  <View key={mem.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
+                        <Text style={{ fontWeight: '800', color: colors.success, fontSize: FontSize.sm }}>
+                          {mem.user.first_name?.[0]}{mem.user.last_name?.[0]}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                          {mem.user.first_name} {mem.user.last_name}
+                        </Text>
+                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                          ₦{Number(mem.personal_amount).toLocaleString()}/period · Total: ₦{Number(mem.total_saved).toLocaleString()}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
+                        {memberPayments.length} payment{memberPayments.length !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+
+                    {lastPayment ? (
+                      <View style={[s.paymentRow, { borderTopColor: colors.border }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <Ionicons
+                            name={lastPayment.status === 'confirmed' ? 'checkmark-done' : lastPayment.status === 'disputed' ? 'alert-circle-outline' : 'time-outline'}
+                            size={13}
+                            color={lastPayment.status === 'confirmed' ? colors.success : lastPayment.status === 'disputed' ? WARNING : colors.textTertiary}
+                          />
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 5, fontWeight: '600' }}>
+                            Last: {lastPayment.period_date}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
+                          ₦{Number(lastPayment.amount).toLocaleString()}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 4 }}>
+                        No payments recorded yet.
+                      </Text>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </>
+        ) : isCollector ? (
           <>
             {/* Tabs */}
             <View style={[s.tabBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>

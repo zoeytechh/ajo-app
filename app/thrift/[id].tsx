@@ -14,7 +14,7 @@ import {
   type ThriftPayment,
 } from '../../src/services/thriftService';
 import { FontSize, Radius, Shadow } from '../../src/theme';
-import { LoadingOverlay, Skeleton, feedback } from '../../src/components';
+import { Skeleton, feedback } from '../../src/components';
 
 const WARNING = '#F59E0B';
 const WARNING_LIGHT = '#FEF3C7';
@@ -276,6 +276,69 @@ function CorrectAmountModal({
   );
 }
 
+// ─── Dispute Payment Modal ────────────────────────────────────────────────────
+function DisputePaymentModal({
+  visible, payment, groupId, onClose,
+}: { visible: boolean; payment: ThriftPayment | null; groupId: number; onClose: () => void }) {
+  const { colors } = useTheme();
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState('');
+  const [err, setErr]       = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => thriftService.disputePayment(groupId, payment!.id, reason.trim()),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
+      setReason(''); setErr('');
+      onClose();
+    },
+    onError: (e: any) => {
+      feedback('error');
+      setErr(e.response?.data?.reason?.[0] ?? e.response?.data?.detail ?? 'Failed to submit dispute.');
+    },
+  });
+
+  if (!payment) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={m.overlay}>
+        <View style={[m.sheet, { backgroundColor: colors.surface }]}>
+          <View style={m.handle} />
+          <Text style={[m.title, { color: colors.textPrimary }]}>Dispute Payment</Text>
+          <Text style={[m.sub, { color: colors.textSecondary }]}>
+            ₦{Number(payment.amount).toLocaleString()} recorded for {payment.period_date}. Tell us why this is incorrect.
+          </Text>
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Reason</Text>
+          <TextInput
+            value={reason}
+            onChangeText={(v) => { setReason(v); setErr(''); }}
+            placeholder="e.g. I paid ₦2,000 not ₦1,000, or I didn't pay this period."
+            multiline
+            style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 90 }]}
+            placeholderTextColor={colors.textTertiary}
+          />
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 6 }}>{err}</Text>}
+          <TouchableOpacity
+            onPress={() => {
+              if (!reason.trim()) { setErr('Please describe why you are disputing this payment.'); return; }
+              mutation.mutate();
+            }}
+            disabled={mutation.isPending}
+            style={[m.btn, { backgroundColor: WARNING, marginTop: 20 }]}
+          >
+            <Text style={m.btnText}>{mutation.isPending ? 'Submitting…' : 'Submit Dispute'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+            <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Report Collector Modal ───────────────────────────────────────────────────
 function ReportCollectorModal({
   visible, groupId, onClose,
@@ -479,6 +542,7 @@ export default function ThriftGroupDetail() {
   const [endCycleOpen, setEndCycleOpen]   = useState(false);
   const [restartOpen, setRestartOpen]     = useState(false);
   const [kebabOpen, setKebabOpen]         = useState(false);
+  const [disputeTarget, setDisputeTarget] = useState<ThriftPayment | null>(null);
 
   const { data: group, isLoading: groupLoading } = useQuery({
     queryKey: ['thrift-group', groupId],
@@ -526,6 +590,15 @@ export default function ThriftGroupDetail() {
       feedback('success');
       queryClient.invalidateQueries({ queryKey: ['thrift-group', groupId] });
       queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
+    },
+    onError: () => feedback('error'),
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: (paymentId: number) => thriftService.confirmPayment(groupId, paymentId),
+    onSuccess: () => {
+      feedback('success');
       queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
     },
     onError: () => feedback('error'),
@@ -858,33 +931,37 @@ export default function ThriftGroupDetail() {
                           </TouchableOpacity>
                         </View>
 
-                        {memberPayments.slice(0, 3).map((p) => (
-                          <View key={p.id} style={[s.paymentRow, { borderTopColor: colors.border }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                              <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 5, fontWeight: '600' }}>
-                                {p.period_date}
-                              </Text>
-                              {!!p.notes && (
-                                <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginLeft: 6 }} numberOfLines={1}>
-                                  · {p.notes}
+                        {memberPayments.slice(0, 3).map((p) => {
+                          const confIcon = p.status === 'confirmed' ? 'checkmark-done' : p.status === 'disputed' ? 'alert-circle-outline' : 'time-outline';
+                          const confColor = p.status === 'confirmed' ? colors.success : p.status === 'disputed' ? WARNING : colors.textTertiary;
+                          return (
+                            <View key={p.id} style={[s.paymentRow, { borderTopColor: colors.border }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                <Ionicons name={confIcon as any} size={13} color={confColor} />
+                                <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 5, fontWeight: '600' }}>
+                                  {p.period_date}
                                 </Text>
-                              )}
+                                {!!p.notes && (
+                                  <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginLeft: 6 }} numberOfLines={1}>
+                                    · {p.notes}
+                                  </Text>
+                                )}
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
+                                  ₦{Number(p.amount).toLocaleString()}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => unmarkMutation.mutate(p.id)}
+                                  disabled={unmarkMutation.isPending}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <Ionicons name="trash-outline" size={14} color={colors.error} />
+                                </TouchableOpacity>
+                              </View>
                             </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                              <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
-                                ₦{Number(p.amount).toLocaleString()}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => unmarkMutation.mutate(p.id)}
-                                disabled={unmarkMutation.isPending}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              >
-                                <Ionicons name="trash-outline" size={14} color={colors.error} />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ))}
+                          );
+                        })}
 
                         {memberPayments.length === 0 && (
                           <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 8 }}>
@@ -975,24 +1052,64 @@ export default function ThriftGroupDetail() {
                 </Text>
               </View>
             ) : (
-              (payments ?? []).map((p) => (
-                <View key={p.id} style={[s.paymentCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={[s.iconBadge, { backgroundColor: colors.successLight }]}>
-                      <Ionicons name="checkmark" size={18} color={colors.success} />
+              (payments ?? []).map((p) => {
+                const isConfirmed = p.status === 'confirmed';
+                const isDisputed  = p.status === 'disputed';
+                const badgeBg     = isConfirmed ? colors.successLight : isDisputed ? WARNING_LIGHT : colors.primaryTint;
+                const badgeColor  = isConfirmed ? colors.success      : isDisputed ? WARNING       : colors.primary;
+                const badgeIcon   = isConfirmed ? 'checkmark-done'    : isDisputed ? 'alert-circle-outline' : 'time-outline';
+                const badgeLabel  = isConfirmed ? 'Confirmed'         : isDisputed ? 'Disputed'    : 'Pending confirmation';
+                return (
+                  <View key={p.id} style={[s.paymentCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={[s.iconBadge, { backgroundColor: badgeBg }]}>
+                        <Ionicons name={badgeIcon as any} size={18} color={badgeColor} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{p.period_date}</Text>
+                        {!!p.notes && (
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{p.notes}</Text>
+                        )}
+                        <Text style={{ fontSize: FontSize.xs, color: badgeColor, marginTop: 3, fontWeight: '600' }}>{badgeLabel}</Text>
+                        {isDisputed && !!p.dispute_reason && (
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }} numberOfLines={2}>
+                            "{p.dispute_reason}"
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.success }}>
+                        ₦{Number(p.amount).toLocaleString()}
+                      </Text>
                     </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{p.period_date}</Text>
-                      {!!p.notes && (
-                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{p.notes}</Text>
-                      )}
-                    </View>
-                    <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.success }}>
-                      ₦{Number(p.amount).toLocaleString()}
-                    </Text>
+
+                    {!isConfirmed && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                        <TouchableOpacity
+                          onPress={() => confirmMutation.mutate(p.id)}
+                          disabled={confirmMutation.isPending}
+                          style={[s.actionBtn, { backgroundColor: colors.successLight, flex: 1, justifyContent: 'center' }]}
+                        >
+                          <Ionicons name="checkmark-done" size={14} color={colors.success} />
+                          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.success, marginLeft: 4 }}>
+                            Confirm
+                          </Text>
+                        </TouchableOpacity>
+                        {!isDisputed && (
+                          <TouchableOpacity
+                            onPress={() => setDisputeTarget(p)}
+                            style={[s.actionBtn, { backgroundColor: WARNING_LIGHT, flex: 1, justifyContent: 'center' }]}
+                          >
+                            <Ionicons name="alert-circle-outline" size={14} color={WARNING} />
+                            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: WARNING, marginLeft: 4 }}>
+                              Dispute
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </>
         )}
@@ -1021,6 +1138,12 @@ export default function ThriftGroupDetail() {
         visible={reportOpen}
         groupId={groupId}
         onClose={() => setReportOpen(false)}
+      />
+      <DisputePaymentModal
+        visible={!!disputeTarget}
+        payment={disputeTarget}
+        groupId={groupId}
+        onClose={() => setDisputeTarget(null)}
       />
       <EndCycleModal
         visible={endCycleOpen}

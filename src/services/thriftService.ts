@@ -3,14 +3,15 @@ import type { AjoUser } from '../store/useAppStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ThriftFrequency    = 'daily' | 'weekly' | 'monthly';
-export type ThriftMemberStatus = 'pending' | 'approved' | 'rejected' | 'amount_pending';
-export type ThriftCycleType    = 'rolling' | 'fixed';
-export type ThriftCycleStatus  = 'active' | 'completed';
-export type OrgType            = 'bank' | 'mfb' | 'cooperative' | 'other';
-export type OrgMemberRole      = 'admin' | 'collector';
-export type OrgMemberStatus    = 'pending' | 'active' | 'suspended';
-export type ReportStatus       = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+export type ThriftFrequency      = 'daily' | 'weekly' | 'monthly';
+export type ThriftMemberStatus   = 'pending' | 'approved' | 'rejected' | 'amount_pending';
+export type ThriftCycleType      = 'rolling' | 'fixed';
+export type ThriftCycleStatus    = 'active' | 'completed';
+export type ThriftPaymentStatus  = 'pending' | 'confirmed' | 'disputed';
+export type OrgType              = 'bank' | 'mfb' | 'cooperative' | 'other';
+export type OrgMemberRole        = 'admin' | 'collector';
+export type OrgMemberStatus      = 'pending' | 'active' | 'suspended';
+export type ReportStatus         = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
 
 export interface ThriftOrganization {
   id: number;
@@ -86,6 +87,19 @@ export interface ThriftPayment {
   period_date: string;
   notes: string;
   marked_at: string;
+  status: ThriftPaymentStatus;
+  payer_confirmed: boolean;
+  dispute_reason: string;
+  disputed_at: string | null;
+  resolved_at: string | null;
+  escalated_at: string | null;
+}
+
+export interface PaymentStats {
+  total: number;
+  confirmed: number;
+  disputed: number;
+  pending: number;
 }
 
 export interface CollectorReport {
@@ -181,6 +195,16 @@ export const thriftService = {
     await api.delete(`/api/thrift/${groupId}/payments/${paymentId}/`);
   },
 
+  confirmPayment: async (groupId: number, paymentId: number): Promise<ThriftPayment> => {
+    const { data } = await api.post(`/api/thrift/${groupId}/payments/${paymentId}/confirm/`);
+    return data;
+  },
+
+  disputePayment: async (groupId: number, paymentId: number, reason: string): Promise<ThriftPayment> => {
+    const { data } = await api.post(`/api/thrift/${groupId}/payments/${paymentId}/dispute/`, { reason });
+    return data;
+  },
+
   // ── Cycles ──────────────────────────────────────────────────────────────────
   getCycles: async (groupId: number): Promise<ThriftCycle[]> => {
     const { data } = await api.get(`/api/thrift/${groupId}/cycles/`);
@@ -271,6 +295,8 @@ export const thriftService = {
     pending_collectors: ThriftOrgMember[];
     groups: ThriftGroup[];
     recent_reports: CollectorReport[];
+    payers: ThriftMember[];
+    payment_stats: PaymentStats;
   }> => {
     const { data } = await api.get(`/api/thrift/orgs/${orgId}/dashboard/`);
     return data;

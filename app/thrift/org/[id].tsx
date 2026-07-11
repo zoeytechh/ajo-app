@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StatusBar, TouchableOpacity, StyleSheet,
-  ScrollView, RefreshControl, Alert, Modal,
+  ScrollView, RefreshControl, Alert, Modal, ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -233,17 +233,28 @@ export default function OrgDashboardRoute() {
         ))}
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ padding: 16 }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {isError && (
-          <View style={[s.errorBanner, { backgroundColor: colors.errorLight }]}>
-            <Ionicons name="warning-outline" size={16} color={colors.error} />
-            <Text style={{ color: colors.error, fontSize: FontSize.sm, marginLeft: 8 }}>Could not load. Pull down to retry.</Text>
-          </View>
-        )}
+      {isLoading && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      )}
+
+      {isError && !isLoading && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Ionicons name="warning-outline" size={48} color={colors.error} />
+          <Text style={{ color: colors.error, fontSize: FontSize.md, fontWeight: '700', marginTop: 12 }}>Could not load dashboard</Text>
+          <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: Radius.md }}>
+            <Text style={{ color: colors.white, fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {!isLoading && !isError && (
+        <ScrollView
+          contentContainerStyle={{ padding: 16 }}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
+          showsVerticalScrollIndicator={false}
+        >
 
         {/* ── Collectors tab ── */}
         {tab === 'collectors' && (
@@ -409,7 +420,8 @@ export default function OrgDashboardRoute() {
             )}
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       <InviteModal orgId={orgId} visible={inviteVisible} onClose={() => setInvite(false)} />
       <ResolveReportModal orgId={orgId} report={selectedReport} visible={resolveVisible} onClose={() => { setResolve(false); setReport(null); }} />

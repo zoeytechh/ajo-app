@@ -275,6 +275,11 @@ export const thriftService = {
     return data;
   },
 
+  getMyOrgMemberships: async (): Promise<ThriftOrgMember[]> => {
+    const { data } = await api.get('/api/thrift/orgs/my-memberships/');
+    return data;
+  },
+
   acceptOrgInvite: async (invite_token: string): Promise<ThriftOrgMember> => {
     const { data } = await api.post('/api/thrift/orgs/accept-invite/', { invite_token });
     return data;

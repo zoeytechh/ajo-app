@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StatusBar, KeyboardAvoidingView,
   Platform, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
@@ -45,6 +45,34 @@ export default function CreateThriftRoute() {
     staleTime: 10 * 60 * 1000,
   });
 
+  const { data: myMemberships } = useQuery({
+    queryKey: ['my-org-memberships'],
+    queryFn: thriftService.getMyOrgMemberships,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Memberships where the invite has been accepted (joined_at set) and not suspended
+  const confirmedMemberOrgs = (myMemberships ?? [])
+    .filter((m) => m.joined_at !== null && m.status !== 'suspended')
+    .map((m) => m.organization);
+
+  // Auto-select on first load if already a member of an org
+  useEffect(() => {
+    const confirmed = (myMemberships ?? []).filter((m) => m.joined_at !== null && m.status !== 'suspended');
+    if (confirmed.length > 0 && selectedOrgId === null) {
+      setOrgId(confirmed[0].organization.id);
+    }
+  }, [myMemberships]);
+
+  // True when the selected org is one the user is already an approved member of
+  const isAlreadyMember = confirmedMemberOrgs.some((o) => o.id === selectedOrgId);
+
+  // Org list: member orgs first (they may not be in partnerOrgs), then remaining partner orgs
+  const displayedOrgs = [
+    ...confirmedMemberOrgs,
+    ...(partnerOrgs ?? []).filter((o) => !confirmedMemberOrgs.some((m) => m.id === o.id)),
+  ];
+
   const mutation = useMutation({
     mutationFn: () => thriftService.createGroup({
       name: name.trim(),
@@ -54,7 +82,7 @@ export default function CreateThriftRoute() {
       start_date:  cycleType === 'fixed' ? startDate || null : null,
       end_date:    cycleType === 'fixed' ? endDate   || null : null,
       org_id:      selectedOrgId,
-      invite_token: selectedOrgId ? inviteToken.trim() || null : null,
+      invite_token: selectedOrgId && !isAlreadyMember ? inviteToken.trim() || null : null,
     }),
     onSuccess: (group) => {
       feedback('success');
@@ -188,11 +216,12 @@ export default function CreateThriftRoute() {
           Tap to select if you collect on behalf of a partner organisation. Leave blank if you're independent.
         </Text>
 
-        {/* Partner orgs list — tap to select, tap again to deselect */}
+        {/* Org list — member orgs first, then remaining partner orgs */}
         {orgsLoading ? (
           <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
-        ) : (partnerOrgs ?? []).map((org) => {
+        ) : displayedOrgs.map((org) => {
           const active = selectedOrgId === org.id;
+          const isMember = confirmedMemberOrgs.some((o) => o.id === org.id);
           return (
             <TouchableOpacity
               key={org.id}
@@ -215,7 +244,9 @@ export default function CreateThriftRoute() {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: active ? colors.primary : colors.textPrimary }}>{org.name}</Text>
-                {org.registration_number ? (
+                {isMember ? (
+                  <Text style={{ fontSize: FontSize.xs, color: colors.success, marginTop: 2 }}>You are a member</Text>
+                ) : org.registration_number ? (
                   <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>RC {org.registration_number}</Text>
                 ) : null}
               </View>
@@ -227,8 +258,8 @@ export default function CreateThriftRoute() {
           );
         })}
 
-        {/* Invite token — required when an org is selected */}
-        {selectedOrgId !== null && (
+        {/* Invite token — only required when selecting an org the user hasn't joined yet */}
+        {selectedOrgId !== null && !isAlreadyMember && (
           <View style={{ marginTop: 16 }}>
             <Input
               label="Organisation invite token"

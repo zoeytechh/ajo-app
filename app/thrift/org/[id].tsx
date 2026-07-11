@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StatusBar, TouchableOpacity, StyleSheet,
-  ScrollView, RefreshControl, Alert, Modal, ActivityIndicator,
+  ScrollView, RefreshControl, Alert, Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { thriftService, type ThriftOrgMember, type CollectorReport } from '../../../src/services/thriftService';
 import { FontSize, Radius } from '../../../src/theme';
-import { Button, Input, LoadingOverlay, feedback } from '../../../src/components';
+import { Button, Input, LoadingOverlay, Skeleton, feedback } from '../../../src/components';
 
 type Tab = 'collectors' | 'groups' | 'reports';
 
@@ -234,8 +234,11 @@ export default function OrgDashboardRoute() {
       </View>
 
       {isLoading && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={{ padding: 16 }}>
+          <Skeleton width="60%" height={20} radius={6} style={{ marginBottom: 10 }} />
+          <Skeleton width="100%" height={80} radius={12} style={{ marginBottom: 10 }} />
+          <Skeleton width="100%" height={80} radius={12} style={{ marginBottom: 10 }} />
+          <Skeleton width="100%" height={80} radius={12} />
         </View>
       )}
 

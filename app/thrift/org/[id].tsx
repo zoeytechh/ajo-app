@@ -355,7 +355,6 @@ export default function OrgDashboardRoute() {
               onPress={() => setInvite(true)}
               style={{ marginBottom: 28, backgroundColor: colors.primary }}
             />
-            <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 20 }} />
 
             {/* Pending approval */}
             {(data?.pending_collectors ?? []).length > 0 && (

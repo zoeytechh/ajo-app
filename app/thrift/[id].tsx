@@ -820,10 +820,12 @@ export default function ThriftGroupDetail() {
             ) : (
               approvedMembers.map((mem) => {
                 const memberPayments = (payments ?? []).filter((p) => p.member === mem.id);
-                const lastPayment = memberPayments[0] ?? null;
+                const recent = memberPayments.slice(0, 3);
+                const extra  = memberPayments.length - recent.length;
                 return (
                   <View key={mem.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    {/* Payer header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                       <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
                         <Text style={{ fontWeight: '800', color: colors.success, fontSize: FontSize.sm }}>
                           {mem.user.first_name?.[0]}{mem.user.last_name?.[0]}
@@ -834,34 +836,97 @@ export default function ThriftGroupDetail() {
                           {mem.user.first_name} {mem.user.last_name}
                         </Text>
                         <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
-                          ₦{Number(mem.personal_amount).toLocaleString()}/period · Total: ₦{Number(mem.total_saved).toLocaleString()}
+                          ₦{Number(mem.personal_amount).toLocaleString()}/period · saved ₦{Number(mem.total_saved).toLocaleString()}
                         </Text>
                       </View>
-                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
-                        {memberPayments.length} payment{memberPayments.length !== 1 ? 's' : ''}
-                      </Text>
+                      <View style={[{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: colors.primaryTint }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
+                          {memberPayments.length} payment{memberPayments.length !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
                     </View>
 
-                    {lastPayment ? (
-                      <View style={[s.paymentRow, { borderTopColor: colors.border }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                          <Ionicons
-                            name={lastPayment.status === 'confirmed' ? 'checkmark-done' : lastPayment.status === 'disputed' ? 'alert-circle-outline' : 'time-outline'}
-                            size={13}
-                            color={lastPayment.status === 'confirmed' ? colors.success : lastPayment.status === 'disputed' ? WARNING : colors.textTertiary}
-                          />
-                          <Text style={{ fontSize: FontSize.xs, color: colors.textPrimary, marginLeft: 5, fontWeight: '600' }}>
-                            Last: {lastPayment.period_date}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: FontSize.xs, color: colors.success, fontWeight: '700' }}>
-                          ₦{Number(lastPayment.amount).toLocaleString()}
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 4 }}>
+                    {/* Payment rows with dual confirmation */}
+                    {recent.length === 0 ? (
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 2 }}>
                         No payments recorded yet.
                       </Text>
+                    ) : (
+                      <>
+                        {recent.map((p, idx) => {
+                          const payerConfirmed = p.payer_confirmed || p.status === 'confirmed';
+                          const isDisputed     = p.status === 'disputed';
+                          const payerPending   = !payerConfirmed && !isDisputed;
+                          return (
+                            <View
+                              key={p.id}
+                              style={[
+                                s.paymentRow,
+                                { borderTopColor: colors.border, flexDirection: 'column', alignItems: 'flex-start', paddingTop: 10, marginTop: idx === 0 ? 0 : 4 },
+                                idx === 0 && { borderTopWidth: 1 },
+                              ]}
+                            >
+                              {/* Date + amount */}
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 7 }}>
+                                <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.textPrimary }}>
+                                  {p.period_date}
+                                </Text>
+                                <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: colors.success }}>
+                                  ₦{Number(p.amount).toLocaleString()}
+                                </Text>
+                              </View>
+
+                              {/* Dual confirmation chips */}
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {/* Step 1 — collector always marked */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                                  <Ionicons name="checkmark-circle" size={11} color={colors.success} />
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>
+                                    Collector marked
+                                  </Text>
+                                </View>
+
+                                {/* Step 2 — payer confirmation */}
+                                {payerConfirmed ? (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                                    <Ionicons name="checkmark-done-circle" size={11} color={colors.success} />
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>
+                                      Payer confirmed
+                                    </Text>
+                                  </View>
+                                ) : isDisputed ? (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: WARNING_LIGHT, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                                    <Ionicons name="alert-circle" size={11} color={WARNING} />
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: WARNING, marginLeft: 4 }}>
+                                      Payer disputed
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, borderWidth: 1, borderColor: colors.border }}>
+                                    <Ionicons name="time-outline" size={11} color={colors.textTertiary} />
+                                    <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textTertiary, marginLeft: 4 }}>
+                                      Awaiting payer
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              {/* Dispute reason */}
+                              {isDisputed && !!p.dispute_reason && (
+                                <Text style={{ fontSize: FontSize.xs, color: WARNING, marginTop: 5, lineHeight: 16 }} numberOfLines={2}>
+                                  "{p.dispute_reason}"
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })}
+
+                        {extra > 0 && (
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginTop: 8, textAlign: 'center' }}>
+                            +{extra} older payment{extra !== 1 ? 's' : ''} not shown
+                          </Text>
+                        )}
+                      </>
                     )}
                   </View>
                 );

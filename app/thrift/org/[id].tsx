@@ -353,8 +353,9 @@ export default function OrgDashboardRoute() {
             <Button
               label="+ Invite Collector"
               onPress={() => setInvite(true)}
-              style={{ marginBottom: 16, backgroundColor: colors.primary }}
+              style={{ marginBottom: 28, backgroundColor: colors.primary }}
             />
+            <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 20 }} />
 
             {/* Pending approval */}
             {(data?.pending_collectors ?? []).length > 0 && (

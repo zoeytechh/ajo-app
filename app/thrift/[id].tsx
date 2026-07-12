@@ -543,6 +543,7 @@ export default function ThriftGroupDetail() {
   const [restartOpen, setRestartOpen]     = useState(false);
   const [kebabOpen, setKebabOpen]         = useState(false);
   const [disputeTarget, setDisputeTarget] = useState<ThriftPayment | null>(null);
+  const [expandedMembers, setExpandedMembers] = useState<Set<number>>(new Set());
 
   const { data: group, isLoading: groupLoading } = useQuery({
     queryKey: ['thrift-group', groupId],
@@ -820,8 +821,14 @@ export default function ThriftGroupDetail() {
             ) : (
               approvedMembers.map((mem) => {
                 const memberPayments = (payments ?? []).filter((p) => p.member === mem.id);
-                const recent = memberPayments.slice(0, 3);
-                const extra  = memberPayments.length - recent.length;
+                const isExpanded     = expandedMembers.has(mem.id);
+                const visiblePayments = isExpanded ? memberPayments : memberPayments.slice(0, 1);
+                const toggleExpand   = () => setExpandedMembers((prev) => {
+                  const next = new Set(prev);
+                  next.has(mem.id) ? next.delete(mem.id) : next.add(mem.id);
+                  return next;
+                });
+
                 return (
                   <View key={mem.id} style={[s.memberCard, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                     {/* Payer header */}
@@ -839,7 +846,7 @@ export default function ThriftGroupDetail() {
                           ₦{Number(mem.personal_amount).toLocaleString()}/period · saved ₦{Number(mem.total_saved).toLocaleString()}
                         </Text>
                       </View>
-                      <View style={[{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: colors.primaryTint }]}>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: colors.primaryTint }}>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
                           {memberPayments.length} payment{memberPayments.length !== 1 ? 's' : ''}
                         </Text>
@@ -847,16 +854,15 @@ export default function ThriftGroupDetail() {
                     </View>
 
                     {/* Payment rows with dual confirmation */}
-                    {recent.length === 0 ? (
+                    {memberPayments.length === 0 ? (
                       <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, paddingTop: 2 }}>
                         No payments recorded yet.
                       </Text>
                     ) : (
                       <>
-                        {recent.map((p, idx) => {
+                        {visiblePayments.map((p, idx) => {
                           const payerConfirmed = p.payer_confirmed || p.status === 'confirmed';
                           const isDisputed     = p.status === 'disputed';
-                          const payerPending   = !payerConfirmed && !isDisputed;
                           return (
                             <View
                               key={p.id}
@@ -878,40 +884,29 @@ export default function ThriftGroupDetail() {
 
                               {/* Dual confirmation chips */}
                               <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {/* Step 1 — collector always marked */}
                                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
                                   <Ionicons name="checkmark-circle" size={11} color={colors.success} />
-                                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>
-                                    Collector marked
-                                  </Text>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>Collector marked</Text>
                                 </View>
 
-                                {/* Step 2 — payer confirmation */}
                                 {payerConfirmed ? (
                                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.successLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
                                     <Ionicons name="checkmark-done-circle" size={11} color={colors.success} />
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>
-                                      Payer confirmed
-                                    </Text>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success, marginLeft: 4 }}>Payer confirmed</Text>
                                   </View>
                                 ) : isDisputed ? (
                                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: WARNING_LIGHT, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
                                     <Ionicons name="alert-circle" size={11} color={WARNING} />
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: WARNING, marginLeft: 4 }}>
-                                      Payer disputed
-                                    </Text>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: WARNING, marginLeft: 4 }}>Payer disputed</Text>
                                   </View>
                                 ) : (
                                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, borderWidth: 1, borderColor: colors.border }}>
                                     <Ionicons name="time-outline" size={11} color={colors.textTertiary} />
-                                    <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textTertiary, marginLeft: 4 }}>
-                                      Awaiting payer
-                                    </Text>
+                                    <Text style={{ fontSize: 10, fontWeight: '600', color: colors.textTertiary, marginLeft: 4 }}>Awaiting payer</Text>
                                   </View>
                                 )}
                               </View>
 
-                              {/* Dispute reason */}
                               {isDisputed && !!p.dispute_reason && (
                                 <Text style={{ fontSize: FontSize.xs, color: WARNING, marginTop: 5, lineHeight: 16 }} numberOfLines={2}>
                                   "{p.dispute_reason}"
@@ -921,10 +916,17 @@ export default function ThriftGroupDetail() {
                           );
                         })}
 
-                        {extra > 0 && (
-                          <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginTop: 8, textAlign: 'center' }}>
-                            +{extra} older payment{extra !== 1 ? 's' : ''} not shown
-                          </Text>
+                        {/* Expand / collapse toggle */}
+                        {memberPayments.length > 1 && (
+                          <TouchableOpacity
+                            onPress={toggleExpand}
+                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10, paddingVertical: 6, borderRadius: Radius.md, backgroundColor: colors.background }}
+                          >
+                            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.primary }}>
+                              {isExpanded ? 'Show less' : `View all ${memberPayments.length} payments`}
+                            </Text>
+                            <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.primary} style={{ marginLeft: 4 }} />
+                          </TouchableOpacity>
                         )}
                       </>
                     )}

@@ -7,8 +7,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
-import { thriftService, type ThriftOrgMember, type CollectorReport } from '../../../src/services/thriftService';
-import { FontSize, Radius } from '../../../src/theme';
+import { thriftService, type ThriftOrgMember, type ThriftGroup, type CollectorReport } from '../../../src/services/thriftService';
+import { FontSize, Radius, Shadow } from '../../../src/theme';
 import { Button, Input, LoadingOverlay, Skeleton, feedback } from '../../../src/components';
 
 type Tab = 'collectors' | 'groups' | 'reports';
@@ -140,6 +140,93 @@ function ResolveReportModal({
   );
 }
 
+// ─── Collector groups modal ───────────────────────────────────────────────────
+
+function CollectorGroupsModal({
+  collector, groups, visible, onClose,
+}: {
+  collector: ThriftOrgMember | null;
+  groups: ThriftGroup[];
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const { colors } = useTheme();
+  const router = useRouter();
+
+  if (!collector) return null;
+
+  const collectorGroups = groups.filter((g) => g.collector.id === collector.user.id);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '75%' }}>
+          {/* Handle */}
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginTop: 12 }} />
+
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
+              <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
+                {collector.user.first_name?.[0]?.toUpperCase() ?? '?'}
+              </Text>
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary }}>
+                {collector.user.first_name} {collector.user.last_name}
+              </Text>
+              <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>
+                {collectorGroups.length} group{collectorGroups.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Groups list */}
+          <ScrollView contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+            {collectorGroups.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="wallet-outline" size={48} color={colors.border} />
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center' }}>
+                  This collector has no groups yet.
+                </Text>
+              </View>
+            ) : (
+              collectorGroups.map((g) => (
+                <TouchableOpacity
+                  key={g.id}
+                  onPress={() => { onClose(); router.push(`/thrift/${g.id}` as any); }}
+                  activeOpacity={0.8}
+                  style={[s.card, { backgroundColor: colors.background, borderColor: colors.border, ...Shadow.soft(colors.black) }]}
+                >
+                  <View style={[s.avatar, { backgroundColor: colors.successLight }]}>
+                    <Ionicons name="wallet-outline" size={18} color={colors.success} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{g.name}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                      {g.frequency} · {g.member_count} payer{g.member_count !== 1 ? 's' : ''}
+                    </Text>
+                    <View style={[s.pill, { backgroundColor: g.active_cycle ? colors.successLight : colors.background, marginTop: 6, borderWidth: g.active_cycle ? 0 : 1, borderColor: colors.border }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: g.active_cycle ? colors.success : colors.textTertiary }}>
+                        {g.active_cycle ? `CYCLE #${g.active_cycle.cycle_number} ACTIVE` : 'NO ACTIVE CYCLE'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                </TouchableOpacity>
+              ))
+            )}
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function OrgDashboardRoute() {
@@ -153,6 +240,7 @@ export default function OrgDashboardRoute() {
   const [inviteVisible, setInvite]    = useState(false);
   const [selectedReport, setReport]   = useState<CollectorReport | null>(null);
   const [resolveVisible, setResolve]  = useState(false);
+  const [collectorGroups, setCollectorGroups] = useState<ThriftOrgMember | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['thrift-org', orgId],
@@ -314,40 +402,55 @@ export default function OrgDashboardRoute() {
               </>
             )}
 
-            {(data?.collectors ?? []).map((m) => (
-              <View key={m.id} style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
-                  <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
-                    {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-                    {m.user.first_name} {m.user.last_name}
-                  </Text>
-                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
-                  <View style={[s.pill, { backgroundColor: m.status === 'active' ? colors.successLight : colors.errorLight, marginTop: 6 }]}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: m.status === 'active' ? colors.success : colors.error }}>
-                      {m.status.toUpperCase()}
+            {(data?.collectors ?? []).map((m) => {
+              const groupCount = (data?.groups ?? []).filter((g) => g.collector.id === m.user.id).length;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  onPress={() => setCollectorGroups(m)}
+                  activeOpacity={0.8}
+                  style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
+                    <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
+                      {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
                     </Text>
                   </View>
-                </View>
-                <View style={{ gap: 6 }}>
-                  {m.status === 'active' ? (
-                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'suspend')} style={[s.miniBtn, { borderColor: '#F59E0B' }]}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Suspend</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                      {m.user.first_name} {m.user.last_name}
+                    </Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                      <View style={[s.pill, { backgroundColor: m.status === 'active' ? colors.successLight : colors.errorLight }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: m.status === 'active' ? colors.success : colors.error }}>
+                          {m.status.toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={[s.pill, { backgroundColor: colors.primaryTint }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
+                          {groupCount} group{groupCount !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                    {m.status === 'active' ? (
+                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'suspend')} style={[s.miniBtn, { borderColor: '#F59E0B' }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Suspend</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'activate')} style={[s.miniBtn, { borderColor: colors.success }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Activate</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'remove')} style={[s.miniBtn, { borderColor: colors.error }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Remove</Text>
                     </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'activate')} style={[s.miniBtn, { borderColor: colors.success }]}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Activate</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={() => confirmMemberAction(m, 'remove')} style={[s.miniBtn, { borderColor: colors.error }]}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
             {!isLoading && (data?.collectors ?? []).length === 0 && (
               <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24, fontSize: FontSize.sm }}>
                 No collectors yet. Invite one above.
@@ -428,6 +531,12 @@ export default function OrgDashboardRoute() {
 
       <InviteModal orgId={orgId} visible={inviteVisible} onClose={() => setInvite(false)} />
       <ResolveReportModal orgId={orgId} report={selectedReport} visible={resolveVisible} onClose={() => { setResolve(false); setReport(null); }} />
+      <CollectorGroupsModal
+        collector={collectorGroups}
+        groups={data?.groups ?? []}
+        visible={!!collectorGroups}
+        onClose={() => setCollectorGroups(null)}
+      />
     </View>
   );
 }

@@ -11,7 +11,7 @@ import { useAuthStore } from '../src/store/useAppStore';
 import { groupService, type Group } from '../src/services/groupService';
 import { thriftService, type ThriftGroup } from '../src/services/thriftService';
 import { getCategories, type InventoryCategory } from '../src/services/inventoryService';
-import { getCategoryEmoji, formatStock, stockColor } from '../src/utils/inventoryHelpers';
+import { getCategoryEmoji } from '../src/utils/inventoryHelpers';
 import { FontSize, Radius, Shadow } from '../src/theme';
 import { Skeleton, Pill } from '../src/components';
 
@@ -378,6 +378,24 @@ export default function HomeRoute() {
         ) : tab === 'thrift' ? (
           /* ── Thrift content ── */
           <>
+            {/* Bills banner — shown to collectors only */}
+            {myThriftGroups.length > 0 && (
+              <TouchableOpacity
+                onPress={() => router.push('/thrift/billing' as any)}
+                style={[s.billsBanner, { backgroundColor: colors.surface, borderColor: colors.primaryBorder }]}
+                activeOpacity={0.82}
+              >
+                <View style={[s.billsIcon, { backgroundColor: colors.primaryTint }]}>
+                  <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>My Platform Bills</Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>View and pay your monthly fee invoices</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+
             {myThriftGroups.length > 0 && (
               <>
                 <SectionTitle label="My Contribution Groups" />
@@ -496,4 +514,6 @@ const s = StyleSheet.create({
   joinCodeBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: Radius.lg, borderWidth: 1, marginTop: 8 },
   joinCodeIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   errorBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: Radius.md, marginBottom: 16 },
+  billsBanner: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: Radius.lg, borderWidth: 1, marginBottom: 20 },
+  billsIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

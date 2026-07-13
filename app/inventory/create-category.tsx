@@ -1,63 +1,58 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, StyleSheet, Alert, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView,
+  TextInput, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../src/theme';
-import { createCategory, type CustomFieldDef } from '../../src/services/inventoryService';
+import { createCategory } from '../../src/services/inventoryService';
 
-type FieldType = 'text' | 'number' | 'date';
+const TEMPLATES = [
+  { emoji: '🛒', label: 'Provisions / Groceries' },
+  { emoji: '👗', label: 'Clothes & Fashion' },
+  { emoji: '📱', label: 'Electronics' },
+  { emoji: '🍲', label: 'Food & Cooked Meals' },
+  { emoji: '💄', label: 'Beauty & Cosmetics' },
+  { emoji: '🏗️', label: 'Building Materials' },
+  { emoji: '💊', label: 'Pharmacy / Medicine' },
+  { emoji: '🚗', label: 'Auto Parts & Vehicles' },
+  { emoji: '📚', label: 'Books & Stationery' },
+  { emoji: '🌾', label: 'Farm Produce' },
+  { emoji: '🪑', label: 'Furniture & Household' },
+  { emoji: '📦', label: 'Other Goods' },
+];
 
 export default function CreateCategoryScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
-
-  const [name, setName] = useState('');
-  const [fields, setFields] = useState<CustomFieldDef[]>([]);
-  const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldType, setNewFieldType] = useState<FieldType>('text');
+  const [customName, setCustomName] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => createCategory({ name: name.trim(), custom_field_defs: fields }),
+    mutationFn: (name: string) => createCategory({ name }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-categories'] });
       router.back();
     },
-    onError: () => Alert.alert('Error', 'Could not create category. Try again.'),
+    onError: () => Alert.alert('Error', 'Could not save. Please try again.'),
   });
 
-  const addField = () => {
-    const n = newFieldName.trim();
-    if (!n) return;
-    if (fields.some(f => f.name.toLowerCase() === n.toLowerCase())) {
-      Alert.alert('Duplicate', 'A field with that name already exists.');
+  const pick = (name: string) => {
+    if (name === 'Other Goods') {
+      setShowCustom(true);
       return;
     }
-    setFields(prev => [...prev, { name: n, type: newFieldType }]);
-    setNewFieldName('');
-    setNewFieldType('text');
+    mutate(name);
   };
 
-  const removeField = (idx: number) =>
-    setFields(prev => prev.filter((_, i) => i !== idx));
-
-  const handleSave = () => {
-    if (!name.trim()) {
-      Alert.alert('Required', 'Enter a category name.');
-      return;
-    }
-    mutate();
-  };
-
-  const typeColors: Record<FieldType, string> = {
-    text: colors.primary,
-    number: colors.success,
-    date: '#E65100',
+  const saveCustom = () => {
+    const n = customName.trim();
+    if (!n) return Alert.alert('Required', 'Please enter what you sell.');
+    mutate(n);
   };
 
   return (
@@ -67,129 +62,94 @@ export default function CreateCategoryScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 16 }}>
-          New Category
-        </Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={isPending}
-          style={[s.saveBtn, { backgroundColor: colors.primary }]}
-        >
-          {isPending
-            ? <ActivityIndicator size="small" color={colors.white} />
-            : <Text style={{ color: colors.white, fontWeight: '700', fontSize: FontSize.sm }}>Save</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-        {/* Name */}
-        <Text style={[s.label, { color: colors.textSecondary }]}>Category Name *</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Electronics, Clothing, Food..."
-          placeholderTextColor={colors.textTertiary}
-          style={[s.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-        />
-
-        {/* Default fields note */}
-        <View style={[s.infoBox, { backgroundColor: colors.primaryTint, borderColor: colors.primaryBorder }]}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-          <Text style={{ fontSize: FontSize.xs, color: colors.primary, marginLeft: 8, flex: 1, lineHeight: 18 }}>
-            Every product automatically has <Text style={{ fontWeight: '700' }}>Name</Text>, <Text style={{ fontWeight: '700' }}>Price</Text>, and <Text style={{ fontWeight: '700' }}>Quantity</Text>. Add extra fields below if needed.
+        <View style={{ marginLeft: 16 }}>
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>
+            What do you sell?
+          </Text>
+          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+            Pick a category to get started
           </Text>
         </View>
+      </View>
 
-        {/* Custom fields */}
-        <Text style={[s.label, { color: colors.textSecondary, marginTop: 20 }]}>Custom Fields (optional)</Text>
-
-        {fields.map((f, i) => (
-          <View key={i} style={[s.fieldRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={[s.typePill, { backgroundColor: typeColors[f.type] + '20' }]}>
-              <Text style={{ fontSize: 10, fontWeight: '700', color: typeColors[f.type], textTransform: 'uppercase' }}>{f.type}</Text>
-            </View>
-            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary, marginLeft: 10 }}>{f.name}</Text>
-            <TouchableOpacity onPress={() => removeField(i)} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Ionicons name="close-circle" size={20} color={colors.error} />
-            </TouchableOpacity>
-          </View>
-        ))}
-
-        {/* Add new field */}
-        <View style={[s.addFieldBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TextInput
-            value={newFieldName}
-            onChangeText={setNewFieldName}
-            placeholder="Field name (e.g. Brand, SKU, Expiry)"
-            placeholderTextColor={colors.textTertiary}
-            style={[s.addFieldInput, { color: colors.textPrimary, borderBottomColor: colors.border }]}
-          />
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-            {(['text', 'number', 'date'] as FieldType[]).map(t => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => setNewFieldType(t)}
-                style={[
-                  s.typeBtn,
-                  {
-                    backgroundColor: newFieldType === t ? typeColors[t] : colors.background,
-                    borderColor: typeColors[t],
-                  },
-                ]}
-              >
-                <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: newFieldType === t ? colors.white : typeColors[t] }}>
-                  {t}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              onPress={addField}
-              style={[s.addBtn, { backgroundColor: colors.primary }]}
-            >
-              <Ionicons name="add" size={18} color={colors.white} />
-              <Text style={{ color: colors.white, fontSize: FontSize.xs, fontWeight: '700', marginLeft: 4 }}>Add</Text>
-            </TouchableOpacity>
-          </View>
+      {isPending ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#E65100" />
+          <Text style={{ color: colors.textSecondary, marginTop: 12, fontSize: FontSize.sm }}>Saving…</Text>
         </View>
-      </ScrollView>
+      ) : showCustom ? (
+        /* ── Custom name input ── */
+        <View style={{ padding: 24 }}>
+          <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 }}>
+            What type of goods do you sell?
+          </Text>
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 20 }}>
+            Write it in your own words — e.g. "Recharge cards", "Baby clothes", "Spare parts"
+          </Text>
+          <TextInput
+            value={customName}
+            onChangeText={setCustomName}
+            placeholder="Enter what you sell..."
+            placeholderTextColor={colors.textTertiary}
+            autoFocus
+            style={[s.textInput, { backgroundColor: colors.surface, borderColor: '#E65100', color: colors.textPrimary }]}
+          />
+          <TouchableOpacity
+            onPress={saveCustom}
+            style={[s.bigBtn, { backgroundColor: '#E65100' }]}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: FontSize.md }}>Continue →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowCustom(false)} style={{ marginTop: 16, alignItems: 'center' }}>
+            <Text style={{ color: colors.textSecondary, fontSize: FontSize.sm }}>← Go back</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        /* ── Template grid ── */
+        <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>
+          {TEMPLATES.map(({ emoji, label }) => (
+            <TouchableOpacity
+              key={label}
+              onPress={() => pick(label)}
+              style={[s.tile, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}
+              activeOpacity={0.78}
+            >
+              <Text style={s.tileEmoji}>{emoji}</Text>
+              <Text style={[s.tileLabel, { color: colors.textPrimary }]} numberOfLines={2}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   header: {
-    flexDirection: 'row',
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 18, borderBottomWidth: 1,
+  },
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    paddingHorizontal: 16, paddingTop: 20, paddingBottom: 60, gap: 12,
+  },
+  tile: {
+    width: '47%', borderRadius: Radius.lg,
+    paddingVertical: 22, paddingHorizontal: 12,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
   },
-  saveBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: Radius.md },
-  body: { padding: 20, paddingBottom: 60 },
-  label: { fontSize: FontSize.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  input: {
-    borderWidth: 1, borderRadius: Radius.md,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: FontSize.sm, marginBottom: 16,
+  tileEmoji: { fontSize: 36, marginBottom: 10 },
+  tileLabel: { fontSize: FontSize.sm, fontWeight: '600', textAlign: 'center', lineHeight: 18 },
+  textInput: {
+    borderWidth: 2, borderRadius: Radius.md,
+    paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: FontSize.md, marginBottom: 20,
   },
-  infoBox: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    padding: 12, borderRadius: Radius.md, borderWidth: 1,
-  },
-  fieldRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 12, borderRadius: Radius.md, borderWidth: 1, marginBottom: 8,
-  },
-  typePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
-  addFieldBox: { padding: 16, borderRadius: Radius.md, borderWidth: 1, marginTop: 8 },
-  addFieldInput: { fontSize: FontSize.sm, paddingVertical: 6, borderBottomWidth: 1 },
-  typeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.sm, borderWidth: 1 },
-  addBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: Radius.sm, marginLeft: 'auto',
+  bigBtn: {
+    paddingVertical: 16, borderRadius: Radius.lg,
+    alignItems: 'center', justifyContent: 'center',
   },
 });

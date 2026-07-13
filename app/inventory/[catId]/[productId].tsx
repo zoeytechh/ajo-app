@@ -12,11 +12,12 @@ import {
   getProducts, getMovements, deleteProduct,
   type InventoryMovement,
 } from '../../../src/services/inventoryService';
+import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
 
-const MOVE_META: Record<string, { label: string; color: string; icon: string }> = {
-  in:         { label: 'Stock In',    color: '#2E7D32', icon: 'arrow-down-circle-outline' },
-  out:        { label: 'Sale / Out',  color: '#C62828', icon: 'arrow-up-circle-outline' },
-  adjustment: { label: 'Adjustment', color: '#1565C0', icon: 'swap-vertical-outline' },
+const MOVE_DISPLAY: Record<string, { label: string; color: string; icon: string }> = {
+  in:         { label: 'Received goods',  color: '#2E7D32', icon: 'arrow-down-circle-outline' },
+  out:        { label: 'Sold',            color: '#C62828', icon: 'cash-outline' },
+  adjustment: { label: 'Count corrected', color: '#1565C0', icon: 'checkmark-circle-outline' },
 };
 
 export default function ProductDetailScreen() {
@@ -34,7 +35,7 @@ export default function ProductDetailScreen() {
   });
   const product = products?.find(p => p.id === prodIdNum);
 
-  const { data: movements, isLoading: movLoading, refetch } = useQuery({
+  const { data: movements, isLoading: movLoading } = useQuery({
     queryKey: ['inventory-movements', prodIdNum],
     queryFn: () => getMovements(prodIdNum),
     enabled: !!prodIdNum,
@@ -47,16 +48,16 @@ export default function ProductDetailScreen() {
       qc.invalidateQueries({ queryKey: ['inventory-categories'] });
       router.back();
     },
-    onError: () => Alert.alert('Error', 'Could not delete product.'),
+    onError: () => Alert.alert('Error', 'Could not delete this product.'),
   });
 
   const confirmDelete = () => {
     Alert.alert(
-      'Delete Product',
-      `Delete "${product?.name}"? All movement history will also be removed.`,
+      'Remove this product?',
+      `"${product?.name}" and all its history will be permanently removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => delProduct() },
+        { text: 'Remove', style: 'destructive', onPress: () => delProduct() },
       ],
     );
   };
@@ -64,8 +65,10 @@ export default function ProductDetailScreen() {
   const fmt = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
-      + ' ' + d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
+      + ' · ' + d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
   };
+
+  const stockValue = product ? parseFloat(product.price) * product.quantity : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -77,11 +80,7 @@ export default function ProductDetailScreen() {
         <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 16, flex: 1 }} numberOfLines={1}>
           {product?.name ?? 'Product'}
         </Text>
-        <TouchableOpacity
-          onPress={confirmDelete}
-          disabled={deleting}
-          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
-        >
+        <TouchableOpacity onPress={confirmDelete} disabled={deleting} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           {deleting
             ? <ActivityIndicator size="small" color={colors.error} />
             : <Ionicons name="trash-outline" size={22} color={colors.error} />
@@ -89,71 +88,90 @@ export default function ProductDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={[s.body, { paddingBottom: 120 }]} showsVerticalScrollIndicator={false}>
-        {/* Product info card */}
+      <ScrollView contentContainerStyle={[s.body, { paddingBottom: 60 }]} showsVerticalScrollIndicator={false}>
+        {/* Stock info card */}
         {product && (
           <View style={[s.infoCard, { backgroundColor: '#FFF3E0' }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <View>
-                <Text style={{ fontSize: FontSize.xs, color: '#BF360C' }}>Price per unit</Text>
-                <Text style={{ fontSize: FontSize.xl, fontWeight: '800', color: '#E65100' }}>
+                <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontWeight: '600' }}>SELLING PRICE</Text>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: '#E65100', marginTop: 4 }}>
                   ₦{parseFloat(product.price).toLocaleString()}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ fontSize: FontSize.xs, color: '#BF360C' }}>In stock</Text>
-                <Text style={{ fontSize: FontSize.xl, fontWeight: '800', color: product.quantity > 0 ? '#2E7D32' : '#C62828' }}>
+                <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontWeight: '600' }}>STOCK</Text>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: stockColor(product.quantity), marginTop: 4 }}>
                   {product.quantity}
                 </Text>
               </View>
             </View>
-            {Object.keys(product.custom_fields).length > 0 && (
-              <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {Object.entries(product.custom_fields).map(([k, v]) => (
-                  <View key={k} style={[s.cfChip, { backgroundColor: '#FFCCBC' }]}>
-                    <Text style={{ fontSize: 11, color: '#BF360C' }}>
-                      <Text style={{ fontWeight: '700' }}>{k}:</Text> {String(v)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <View style={[s.statusBar, { backgroundColor: '#FFCCBC' }]}>
+              <Ionicons
+                name={product.quantity === 0 ? 'alert-circle' : product.quantity < 5 ? 'warning' : 'checkmark-circle'}
+                size={14}
+                color={stockColor(product.quantity)}
+              />
+              <Text style={{ fontSize: FontSize.xs, color: stockColor(product.quantity), marginLeft: 6, fontWeight: '600' }}>
+                {formatStock(product.quantity)}
+              </Text>
+              <Text style={{ marginLeft: 'auto', fontSize: FontSize.xs, color: '#BF360C' }}>
+                Stock value: ₦{stockValue.toLocaleString()}
+              </Text>
+            </View>
           </View>
         )}
 
-        {/* Action buttons */}
-        <View style={s.actionRow}>
-          {[
-            { type: 'in',         label: 'Stock In',    color: '#2E7D32', bg: '#E8F5E9', icon: 'arrow-down-circle' },
-            { type: 'out',        label: 'Record Sale', color: '#C62828', bg: '#FFEBEE', icon: 'arrow-up-circle' },
-            { type: 'adjustment', label: 'Adjust',      color: '#1565C0', bg: '#E3F2FD', icon: 'swap-vertical' },
-          ].map(btn => (
-            <TouchableOpacity
-              key={btn.type}
-              onPress={() => router.push(`/inventory/${catId}/${productId}/move?type=${btn.type}` as any)}
-              style={[s.actionBtn, { backgroundColor: btn.bg }]}
-              activeOpacity={0.82}
-            >
-              <Ionicons name={btn.icon as any} size={22} color={btn.color} />
-              <Text style={{ fontSize: FontSize.xs, color: btn.color, fontWeight: '700', marginTop: 4, textAlign: 'center' }}>
-                {btn.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Action buttons — plain English */}
+        <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>What do you want to record?</Text>
+        <View style={s.actionGrid}>
+          <TouchableOpacity
+            onPress={() => router.push(`/inventory/${catId}/${productId}/move?type=in` as any)}
+            style={[s.actionCard, { backgroundColor: '#E8F5E9' }]}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="arrow-down-circle" size={32} color="#2E7D32" />
+            <Text style={[s.actionTitle, { color: '#2E7D32' }]}>I bought goods</Text>
+            <Text style={[s.actionSub, { color: '#388E3C' }]}>Received new stock</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push(`/inventory/${catId}/${productId}/move?type=out` as any)}
+            style={[s.actionCard, { backgroundColor: '#FFEBEE' }]}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="cash-outline" size={32} color="#C62828" />
+            <Text style={[s.actionTitle, { color: '#C62828' }]}>I made a sale</Text>
+            <Text style={[s.actionSub, { color: '#E53935' }]}>Remove sold items</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push(`/inventory/${catId}/${productId}/move?type=adjustment` as any)}
+            style={[s.actionCard, { backgroundColor: '#E3F2FD', width: '100%' }]}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="checkmark-circle-outline" size={28} color="#1565C0" />
+            <Text style={[s.actionTitle, { color: '#1565C0' }]}>Fix / correct my count</Text>
+            <Text style={[s.actionSub, { color: '#1976D2' }]}>Count your goods and update the record</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Movement history */}
-        <Text style={[s.sectionTitle, { color: colors.textPrimary }]}>Movement History</Text>
+        {/* History */}
+        <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 8 }]}>
+          Recent history
+        </Text>
 
         {movLoading ? (
-          <ActivityIndicator color="#E65100" style={{ marginTop: 20 }} />
+          <ActivityIndicator color="#E65100" style={{ marginTop: 16 }} />
         ) : (movements ?? []).length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <Text style={{ color: colors.textSecondary, fontSize: FontSize.sm }}>No movements recorded yet.</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: FontSize.sm, textAlign: 'center' }}>
+              No records yet. Use the buttons above to start tracking this product.
+            </Text>
           </View>
         ) : (
           (movements ?? []).map((m: InventoryMovement) => {
-            const meta = MOVE_META[m.movement_type];
+            const meta = MOVE_DISPLAY[m.movement_type] ?? MOVE_DISPLAY.in;
             return (
               <View key={m.id} style={[s.moveRow, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
                 <View style={[s.moveIcon, { backgroundColor: meta.color + '15' }]}>
@@ -172,7 +190,9 @@ export default function ProductDetailScreen() {
                   <Text style={{ fontSize: FontSize.sm, fontWeight: '800', color: meta.color }}>
                     {m.quantity_change > 0 ? '+' : ''}{m.quantity_change}
                   </Text>
-                  <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>bal: {m.balance_after}</Text>
+                  <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>
+                    bal: {m.balance_after}
+                  </Text>
                 </View>
               </View>
             );
@@ -189,11 +209,22 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
   body: { padding: 20 },
-  infoCard: { borderRadius: Radius.lg, padding: 20, marginBottom: 16 },
-  cfChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm },
-  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  actionBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: Radius.md },
-  sectionTitle: { fontSize: FontSize.md, fontWeight: '700', marginBottom: 12 },
+  infoCard: { borderRadius: Radius.xl ?? Radius.lg, padding: 20, marginBottom: 24 },
+  statusBar: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 14, padding: 10, borderRadius: Radius.md,
+  },
+  sectionTitle: {
+    fontSize: FontSize.xs, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12,
+  },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
+  actionCard: {
+    width: '48%', padding: 16, borderRadius: Radius.lg,
+    alignItems: 'center', gap: 6,
+  },
+  actionTitle: { fontSize: FontSize.sm, fontWeight: '800', textAlign: 'center' },
+  actionSub: { fontSize: FontSize.xs, textAlign: 'center' },
   moveRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: Radius.lg, marginBottom: 10 },
   moveIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

@@ -11,6 +11,7 @@ import { useAuthStore } from '../src/store/useAppStore';
 import { groupService, type Group } from '../src/services/groupService';
 import { thriftService, type ThriftGroup } from '../src/services/thriftService';
 import { getCategories, type InventoryCategory } from '../src/services/inventoryService';
+import { getCategoryEmoji, formatStock, stockColor } from '../src/utils/inventoryHelpers';
 import { FontSize, Radius, Shadow } from '../src/theme';
 import { Skeleton, Pill } from '../src/components';
 
@@ -105,6 +106,7 @@ const ThriftCard: React.FC<{ group: ThriftGroup; isCollector: boolean; onPress: 
 // ─── Inventory Category Card ──────────────────────────────────────────────────
 const CategoryCard: React.FC<{ cat: InventoryCategory; onPress: () => void }> = ({ cat, onPress }) => {
   const { colors } = useTheme();
+  const emoji = getCategoryEmoji(cat.name);
   return (
     <TouchableOpacity
       activeOpacity={0.82}
@@ -113,7 +115,7 @@ const CategoryCard: React.FC<{ cat: InventoryCategory; onPress: () => void }> = 
     >
       <View style={s.cardTop}>
         <View style={[s.thriftBadge, { backgroundColor: '#FFF3E0' }]}>
-          <Ionicons name="cube-outline" size={18} color="#E65100" />
+          <Text style={{ fontSize: 18 }}>{emoji}</Text>
         </View>
         <View style={{ flex: 1, marginHorizontal: 12 }}>
           <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
@@ -125,11 +127,6 @@ const CategoryCard: React.FC<{ cat: InventoryCategory; onPress: () => void }> = 
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
       </View>
-      {cat.custom_field_defs.length > 0 && (
-        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 4 }}>
-          Custom fields: {cat.custom_field_defs.map(f => f.name).join(', ')}
-        </Text>
-      )}
     </TouchableOpacity>
   );
 };

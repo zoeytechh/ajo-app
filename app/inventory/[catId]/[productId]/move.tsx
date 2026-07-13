@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,14 +11,52 @@ import { useTheme } from '../../../../src/hooks/useTheme';
 import { FontSize, Radius } from '../../../../src/theme';
 import { getProducts, recordMovement, type MovementType } from '../../../../src/services/inventoryService';
 
-const META: Record<MovementType, { label: string; color: string; bg: string; hint: string }> = {
-  in:         { label: 'Stock In',    color: '#2E7D32', bg: '#E8F5E9', hint: 'How many units are you adding?' },
-  out:        { label: 'Record Sale', color: '#C62828', bg: '#FFEBEE', hint: 'How many units were sold / removed?' },
-  adjustment: { label: 'Adjust Stock', color: '#1565C0', bg: '#E3F2FD', hint: 'Set the absolute new quantity.' },
+type ActionConfig = {
+  title: string;
+  subtitle: string;
+  qtyLabel: string;
+  qtyHint: string;
+  color: string;
+  bg: string;
+  icon: string;
+  btnLabel: string;
+};
+
+const ACTION: Record<MovementType, ActionConfig> = {
+  in: {
+    title: 'I bought / received goods',
+    subtitle: 'How many pieces did you bring in?',
+    qtyLabel: 'Quantity received',
+    qtyHint: 'e.g. if you bought 24 cartons, enter 24',
+    color: '#2E7D32',
+    bg: '#E8F5E9',
+    icon: 'arrow-down-circle',
+    btnLabel: '✓  Add to my stock',
+  },
+  out: {
+    title: 'I made a sale',
+    subtitle: 'How many pieces did you sell?',
+    qtyLabel: 'Quantity sold',
+    qtyHint: 'e.g. if you sold 3 pieces, enter 3',
+    color: '#C62828',
+    bg: '#FFEBEE',
+    icon: 'cash-outline',
+    btnLabel: '✓  Record this sale',
+  },
+  adjustment: {
+    title: 'Fix / correct my stock count',
+    subtitle: 'Count the goods in front of you right now and enter the exact number.',
+    qtyLabel: 'Actual quantity now',
+    qtyHint: 'Count everything in stock and enter the total',
+    color: '#1565C0',
+    bg: '#E3F2FD',
+    icon: 'checkmark-circle-outline',
+    btnLabel: '✓  Save correct count',
+  },
 };
 
 export default function MoveScreen() {
-  const { catId, productId, type } = useLocalSearchParams<{ catId: string; productId: string; type: MovementType }>();
+  const { catId, productId, type } = useLocalSearchParams<{ catId: string; productId: string; type: string }>();
   const catIdNum  = Number(catId);
   const prodIdNum = Number(productId);
   const mvType: MovementType = (['in', 'out', 'adjustment'] as MovementType[]).includes(type as MovementType)
@@ -39,94 +78,120 @@ export default function MoveScreen() {
   const [note, setNote] = useState('');
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => recordMovement(prodIdNum, { movement_type: mvType, quantity: parseInt(quantity, 10), note }),
+    mutationFn: () =>
+      recordMovement(prodIdNum, { movement_type: mvType, quantity: parseInt(quantity, 10), note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-movements', prodIdNum] });
       qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
       router.back();
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.quantity ?? 'Could not record movement. Try again.';
-      Alert.alert('Error', msg);
+      const raw = err?.response?.data?.quantity;
+      const msg = raw ?? 'Something went wrong. Please try again.';
+      Alert.alert(
+        mvType === 'out' ? 'Not enough stock' : 'Error',
+        typeof msg === 'string' ? msg : 'Please check the quantity and try again.',
+      );
     },
   });
 
   const handleSave = () => {
     const qty = parseInt(quantity, 10);
     if (!quantity || isNaN(qty) || qty < 1) {
-      Alert.alert('Required', 'Enter a valid quantity (minimum 1).');
+      Alert.alert('Enter a quantity', 'The quantity must be at least 1.');
+      return;
+    }
+    if (mvType === 'out' && product && qty > product.quantity) {
+      Alert.alert(
+        'Not enough stock',
+        `You only have ${product.quantity} in stock. You cannot sell more than that.`,
+      );
       return;
     }
     mutate();
   };
 
-  const meta = META[mvType];
+  const cfg = ACTION[mvType];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
       <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: meta.color, marginLeft: 16, flex: 1 }}>
-          {meta.label}
+        <Ionicons name={cfg.icon as any} size={22} color={cfg.color} style={{ marginLeft: 14 }} />
+        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: cfg.color, marginLeft: 8, flex: 1 }}>
+          {cfg.title}
         </Text>
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={isPending}
-          style={[s.saveBtn, { backgroundColor: meta.color }]}
-        >
-          {isPending
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.sm }}>Confirm</Text>
-          }
-        </TouchableOpacity>
       </View>
 
       <View style={s.body}>
         {/* Product info */}
         {product && (
-          <View style={[s.productCard, { backgroundColor: meta.bg }]}>
-            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: meta.color }}>{product.name}</Text>
-            <View style={{ flexDirection: 'row', gap: 20, marginTop: 6 }}>
-              <Text style={{ fontSize: FontSize.xs, color: meta.color }}>
-                Current stock: <Text style={{ fontWeight: '800' }}>{product.quantity}</Text>
-              </Text>
-              <Text style={{ fontSize: FontSize.xs, color: meta.color }}>
-                Price: <Text style={{ fontWeight: '800' }}>₦{parseFloat(product.price).toLocaleString()}</Text>
-              </Text>
-            </View>
+          <View style={[s.productCard, { backgroundColor: cfg.bg }]}>
+            <Text style={{ fontSize: FontSize.xs, color: cfg.color, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              Product
+            </Text>
+            <Text style={{ fontSize: FontSize.md, fontWeight: '800', color: cfg.color, marginTop: 4 }}>
+              {product.name}
+            </Text>
+            <Text style={{ fontSize: FontSize.sm, color: cfg.color, marginTop: 4, opacity: 0.8 }}>
+              Currently in stock: <Text style={{ fontWeight: '700' }}>{product.quantity} {product.quantity === 1 ? 'piece' : 'pieces'}</Text>
+            </Text>
           </View>
         )}
 
-        {/* Quantity */}
-        <Text style={[s.label, { color: colors.textSecondary, marginTop: 20 }]}>
-          {mvType === 'adjustment' ? 'New Total Quantity *' : 'Quantity *'}
+        {/* Subtitle */}
+        <Text style={{ fontSize: FontSize.md, fontWeight: '600', color: colors.textPrimary, marginTop: 24, marginBottom: 6 }}>
+          {cfg.subtitle}
         </Text>
-        <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginBottom: 8 }}>{meta.hint}</Text>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginBottom: 16 }}>
+          {cfg.qtyHint}
+        </Text>
+
+        {/* Big quantity input */}
         <TextInput
           value={quantity}
           onChangeText={setQuantity}
           keyboardType="number-pad"
           placeholder="0"
-          placeholderTextColor={colors.textTertiary}
-          style={[s.input, s.bigInput, { backgroundColor: colors.surface, borderColor: meta.color + '60', color: meta.color }]}
+          placeholderTextColor={cfg.color + '50'}
+          style={[s.bigInput, { backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.color + '40' }]}
           autoFocus
         />
 
-        {/* Note */}
-        <Text style={[s.label, { color: colors.textSecondary, marginTop: 8 }]}>Note (optional)</Text>
+        {/* Optional note */}
+        <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 }}>
+          Extra note (optional)
+        </Text>
         <TextInput
           value={note}
           onChangeText={setNote}
-          placeholder="e.g. Received from supplier, sold to John..."
+          placeholder="e.g. Bought from Alhaji Musa, sold to a customer..."
           placeholderTextColor={colors.textTertiary}
           multiline
           numberOfLines={3}
-          style={[s.input, s.noteInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+          style={[s.noteInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
         />
+
+        {/* Confirm button */}
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={isPending}
+          style={[s.confirmBtn, { backgroundColor: cfg.color }]}
+          activeOpacity={0.85}
+        >
+          {isPending
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={{ color: '#fff', fontWeight: '800', fontSize: FontSize.md }}>{cfg.btnLabel}</Text>
+          }
+        </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -135,15 +200,20 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
-  saveBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: Radius.md },
-  body: { padding: 20 },
+  body: { padding: 24 },
   productCard: { padding: 16, borderRadius: Radius.lg },
-  label: { fontSize: FontSize.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  input: {
+  bigInput: {
+    borderWidth: 2, borderRadius: Radius.lg,
+    fontSize: 48, fontWeight: '900', textAlign: 'center',
+    paddingVertical: 20, marginBottom: 24,
+  },
+  noteInput: {
     borderWidth: 1.5, borderRadius: Radius.md,
     paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: FontSize.sm, marginBottom: 16,
+    fontSize: FontSize.sm, textAlignVertical: 'top', minHeight: 80, marginBottom: 24,
   },
-  bigInput: { fontSize: 32, fontWeight: '800', textAlign: 'center', paddingVertical: 20 },
-  noteInput: { textAlignVertical: 'top', minHeight: 80 },
+  confirmBtn: {
+    paddingVertical: 16, borderRadius: Radius.lg,
+    alignItems: 'center', justifyContent: 'center',
+  },
 });

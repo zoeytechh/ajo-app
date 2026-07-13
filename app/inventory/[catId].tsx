@@ -12,6 +12,7 @@ import {
   getCategories, getProducts, deleteCategory,
   type InventoryCategory, type InventoryProduct,
 } from '../../src/services/inventoryService';
+import { getCategoryEmoji, formatStock, stockColor } from '../../src/utils/inventoryHelpers';
 
 export default function CategoryDetailScreen() {
   const { catId } = useLocalSearchParams<{ catId: string }>();
@@ -25,6 +26,7 @@ export default function CategoryDetailScreen() {
     queryFn: getCategories,
   });
   const cat = categories?.find(c => c.id === catIdNum);
+  const emoji = cat ? getCategoryEmoji(cat.name) : '📦';
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['inventory-products', catIdNum],
@@ -64,7 +66,8 @@ export default function CategoryDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 16, flex: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 20, marginLeft: 14 }}>{emoji}</Text>
+        <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 10, flex: 1 }} numberOfLines={1}>
           {cat?.name ?? 'Category'}
         </Text>
         <TouchableOpacity
@@ -132,12 +135,14 @@ export default function CategoryDetailScreen() {
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <View style={[s.qtyBadge, { backgroundColor: p.quantity > 0 ? '#E8F5E9' : '#FFEBEE' }]}>
-                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: p.quantity > 0 ? '#2E7D32' : '#C62828' }}>
+                  <View style={[s.qtyBadge, { backgroundColor: stockColor(p.quantity) + '18' }]}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: stockColor(p.quantity) }}>
                       {p.quantity}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>in stock</Text>
+                  <Text style={{ fontSize: 10, color: stockColor(p.quantity), marginTop: 2, fontWeight: '600' }}>
+                    {p.quantity === 0 ? 'Out of stock' : p.quantity < 5 ? 'Low stock' : 'In stock'}
+                  </Text>
                 </View>
               </View>
               {Object.keys(p.custom_fields).length > 0 && (

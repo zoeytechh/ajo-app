@@ -303,8 +303,12 @@ function DisputePaymentModal({
       setRecording(rec);
       setRecSeconds(0);
       timerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
-    } catch {
-      setErr('Could not start recording.');
+    } catch (e: any) {
+      if (e?.message?.includes('native module') || e?.message?.includes('ExponentAV')) {
+        setErr('Voice recording requires a development build. Type your dispute instead.');
+      } else {
+        setErr('Could not start recording.');
+      }
     }
   };
 

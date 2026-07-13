@@ -333,6 +333,13 @@ export default function OrgDashboardRoute() {
             <Text style={{ fontSize: 10, color: colors.success, fontWeight: '700', marginLeft: 3 }}>Verified</Text>
           </View>
         )}
+        <TouchableOpacity
+          onPress={() => router.push(`/thrift/org/${orgId}/billing` as any)}
+          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+          style={{ marginLeft: 8 }}
+        >
+          <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
         {data && (
           <TouchableOpacity onPress={handleExport} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }} style={{ marginLeft: 8 }}>
             <Ionicons name="share-outline" size={22} color={colors.textPrimary} />

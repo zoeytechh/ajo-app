@@ -44,27 +44,27 @@ export interface InventoryMovement {
 // ─── Category endpoints ───────────────────────────────────────────────────────
 
 export const getCategories = (): Promise<InventoryCategory[]> =>
-  api.get('/inventory/categories/').then(r => r.data);
+  api.get('/api/inventory/categories/').then(r => r.data);
 
 export const createCategory = (data: {
   name: string;
   custom_field_defs?: CustomFieldDef[];
 }): Promise<InventoryCategory> =>
-  api.post('/inventory/categories/', data).then(r => r.data);
+  api.post('/api/inventory/categories/', data).then(r => r.data);
 
 export const updateCategory = (
   catId: number,
   data: Partial<{ name: string; custom_field_defs: CustomFieldDef[] }>,
 ): Promise<InventoryCategory> =>
-  api.patch(`/inventory/categories/${catId}/`, data).then(r => r.data);
+  api.patch(`/api/inventory/categories/${catId}/`, data).then(r => r.data);
 
 export const deleteCategory = (catId: number): Promise<void> =>
-  api.delete(`/inventory/categories/${catId}/`).then(() => undefined);
+  api.delete(`/api/inventory/categories/${catId}/`).then(() => undefined);
 
 // ─── Product endpoints ────────────────────────────────────────────────────────
 
 export const getProducts = (catId: number): Promise<InventoryProduct[]> =>
-  api.get(`/inventory/categories/${catId}/products/`).then(r => r.data);
+  api.get(`/api/inventory/categories/${catId}/products/`).then(r => r.data);
 
 export const createProduct = (
   catId: number,
@@ -75,24 +75,24 @@ export const createProduct = (
     custom_fields?: Record<string, string | number>;
   },
 ): Promise<InventoryProduct> =>
-  api.post(`/inventory/categories/${catId}/products/`, data).then(r => r.data);
+  api.post(`/api/inventory/categories/${catId}/products/`, data).then(r => r.data);
 
 export const updateProduct = (
   prodId: number,
   data: Partial<{ name: string; price: string | number; custom_fields: Record<string, string | number> }>,
 ): Promise<InventoryProduct> =>
-  api.patch(`/inventory/products/${prodId}/`, data).then(r => r.data);
+  api.patch(`/api/inventory/products/${prodId}/`, data).then(r => r.data);
 
 export const deleteProduct = (prodId: number): Promise<void> =>
-  api.delete(`/inventory/products/${prodId}/`).then(() => undefined);
+  api.delete(`/api/inventory/products/${prodId}/`).then(() => undefined);
 
 // ─── Movement endpoints ───────────────────────────────────────────────────────
 
 export const getMovements = (prodId: number): Promise<InventoryMovement[]> =>
-  api.get(`/inventory/products/${prodId}/movements/`).then(r => r.data);
+  api.get(`/api/inventory/products/${prodId}/movements/`).then(r => r.data);
 
 export const recordMovement = (
   prodId: number,
   data: { movement_type: MovementType; quantity: number; note?: string },
 ): Promise<InventoryMovement> =>
-  api.post(`/inventory/products/${prodId}/movements/`, data).then(r => r.data);
+  api.post(`/api/inventory/products/${prodId}/movements/`, data).then(r => r.data);

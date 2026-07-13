@@ -378,7 +378,7 @@ export default function HomeRoute() {
               </TouchableOpacity>
             )}
           </>
-        ) : (
+        ) : tab === 'thrift' ? (
           /* ── Thrift content ── */
           <>
             {myThriftGroups.length > 0 && (

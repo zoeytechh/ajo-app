@@ -10,6 +10,7 @@ import { useTheme } from '../src/hooks/useTheme';
 import { useAuthStore } from '../src/store/useAppStore';
 import { groupService, type Group } from '../src/services/groupService';
 import { thriftService, type ThriftGroup } from '../src/services/thriftService';
+import { getCategories, type InventoryCategory } from '../src/services/inventoryService';
 import { FontSize, Radius, Shadow } from '../src/theme';
 import { Skeleton, Pill } from '../src/components';
 
@@ -101,6 +102,38 @@ const ThriftCard: React.FC<{ group: ThriftGroup; isCollector: boolean; onPress: 
   );
 };
 
+// ─── Inventory Category Card ──────────────────────────────────────────────────
+const CategoryCard: React.FC<{ cat: InventoryCategory; onPress: () => void }> = ({ cat, onPress }) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={[s.card, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}
+    >
+      <View style={s.cardTop}>
+        <View style={[s.thriftBadge, { backgroundColor: '#FFF3E0' }]}>
+          <Ionicons name="cube-outline" size={18} color="#E65100" />
+        </View>
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
+            {cat.name}
+          </Text>
+          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+            {cat.product_count} {cat.product_count === 1 ? 'product' : 'products'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+      </View>
+      {cat.custom_field_defs.length > 0 && (
+        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 4 }}>
+          Custom fields: {cat.custom_field_defs.map(f => f.name).join(', ')}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 // ─── Skeletons ────────────────────────────────────────────────────────────────
 const CardSkeleton: React.FC = () => {
   const { colors } = useTheme();
@@ -130,7 +163,7 @@ export default function HomeRoute() {
   const { colors, isDark } = useTheme();
   const { user, logout } = useAuthStore();
   const router = useRouter();
-  const [tab, setTab] = useState<'ajo' | 'thrift'>('thrift');
+  const [tab, setTab] = useState<'ajo' | 'thrift' | 'inventory'>('thrift');
 
   const { data: groups, isLoading: ajoLoading, isError: ajoError, refetch: refetchAjo, isRefetching: ajoRefetching } = useQuery({
     queryKey: ['groups'],
@@ -145,6 +178,11 @@ export default function HomeRoute() {
   const { data: myOrgs } = useQuery({
     queryKey: ['thrift-orgs'],
     queryFn: thriftService.getOrgs,
+  });
+
+  const { data: categories, isLoading: invLoading, isError: invError, refetch: refetchInv, isRefetching: invRefetching } = useQuery({
+    queryKey: ['inventory-categories'],
+    queryFn: getCategories,
   });
 
   const handleLogout = () => { logout(); router.replace('/login'); };
@@ -174,16 +212,18 @@ export default function HomeRoute() {
   const isOrgAdmin = (myOrgs ?? []).length > 0;
   // Users with any thrift involvement (collector or payer) only see Contributions — no Ajo tab
 
-  const isLoading   = tab === 'ajo' ? ajoLoading   : thriftLoading;
-  const isError     = tab === 'ajo' ? ajoError     : thriftError;
-  const isRefreshing = tab === 'ajo' ? ajoRefetching : thriftRefetching;
-  const onRefresh   = tab === 'ajo' ? refetchAjo   : refetchThrift;
+  const isLoading    = tab === 'ajo' ? ajoLoading    : tab === 'thrift' ? thriftLoading : invLoading;
+  const isError      = tab === 'ajo' ? ajoError      : tab === 'thrift' ? thriftError   : invError;
+  const isRefreshing = tab === 'ajo' ? ajoRefetching : tab === 'thrift' ? thriftRefetching : invRefetching;
+  const onRefresh    = tab === 'ajo' ? refetchAjo    : tab === 'thrift' ? refetchThrift : refetchInv;
 
   const handleFab = () => {
     if (tab === 'ajo') {
       requirePhoto(() => router.push('/group/create' as any));
-    } else {
+    } else if (tab === 'thrift') {
       requirePhoto(() => router.push('/thrift/create' as any));
+    } else {
+      router.push('/inventory/create-category' as any);
     }
   };
 
@@ -261,14 +301,18 @@ export default function HomeRoute() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Ajo / Contributions Toggle ── */}
+      {/* ── Tab Row ── */}
       <View style={[s.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {(['ajo', 'thrift'] as const).map((t) => (
-          <TouchableOpacity key={t} onPress={() => setTab(t)} style={s.tabBtn} activeOpacity={0.8}>
-            <Text style={[s.tabLabel, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '400' }]}>
-              {t === 'ajo' ? 'Ajo Groups' : 'Contributions'}
+        {([
+          { key: 'ajo', label: 'Ajo Groups' },
+          { key: 'thrift', label: 'Contributions' },
+          { key: 'inventory', label: 'Inventory' },
+        ] as const).map(({ key, label }) => (
+          <TouchableOpacity key={key} onPress={() => setTab(key)} style={s.tabBtn} activeOpacity={0.8}>
+            <Text style={[s.tabLabel, { color: tab === key ? colors.primary : colors.textSecondary, fontWeight: tab === key ? '700' : '400' }]}>
+              {label}
             </Text>
-            {tab === t && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
+            {tab === key && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -380,6 +424,32 @@ export default function HomeRoute() {
               </TouchableOpacity>
             )}
           </>
+        ) : (
+          /* ── Inventory content ── */
+          <>
+            {(categories ?? []).length > 0 ? (
+              <>
+                <SectionTitle label="My Inventory Categories" />
+                {(categories ?? []).map((cat) => (
+                  <CategoryCard
+                    key={cat.id}
+                    cat={cat}
+                    onPress={() => router.push(`/inventory/${cat.id}` as any)}
+                  />
+                ))}
+              </>
+            ) : (
+              !invLoading && !invError && (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="cube-outline" size={64} color="#FFF3E0" />
+                  <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 16, textAlign: 'center' }}>No inventory yet</Text>
+                  <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>
+                    Create a category to start tracking your products and stock movements.
+                  </Text>
+                </View>
+              )
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -387,7 +457,7 @@ export default function HomeRoute() {
       <TouchableOpacity
         onPress={handleFab}
         activeOpacity={0.85}
-        style={[s.fab, { backgroundColor: tab === 'ajo' ? colors.primary : colors.success, ...Shadow.strong(tab === 'ajo' ? colors.primary : colors.success) }]}
+        style={[s.fab, { backgroundColor: tab === 'ajo' ? colors.primary : tab === 'thrift' ? colors.success : '#E65100', ...Shadow.strong(tab === 'ajo' ? colors.primary : tab === 'thrift' ? colors.success : '#E65100') }]}
       >
         <Ionicons name="add" size={28} color={colors.white} />
       </TouchableOpacity>

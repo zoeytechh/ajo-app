@@ -1,17 +1,22 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, StatusBar, KeyboardAvoidingView,
   Platform, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { FontSize, Radius } from './theme';
 import { Button, Input, Divider, OTPBox, LoadingOverlay, Bouncy, feedback } from './components';
 import Svg, { Path } from 'react-native-svg';
 import { authService } from './services/authService';
 import { useAuthStore } from './store/useAppStore';
 import { useTheme } from './hooks/useTheme';
+
+WebBrowser.maybeCompleteAuthSession();
 
 // ─── Logo Mark ────────────────────────────────────────────────────────────────
 const SmallLogo = () => {
@@ -60,18 +65,46 @@ const AuthHeader: React.FC<{ title: string; subtitle: string; showLogo?: boolean
 // REGISTER SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 interface RegisterProps {
-  onSuccess: (email: string, phone: string, isOrg: boolean) => void;
+  onSuccess: (email: string, phone: string) => void;
   onLogin: () => void;
 }
 
 export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) => {
   const { colors, isDark } = useTheme();
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
-  const [accountType, setAccountType] = useState<'individual' | 'org'>('individual');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
+
+  const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken;
+      if (idToken) handleGoogleSignIn(idToken);
+    }
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async (idToken: string) => {
+    setLoading(true);
+    setServerError('');
+    try {
+      await authService.googleSignIn(idToken);
+      feedback('success');
+      // AuthGuard routes to /complete-profile automatically (phone_number is null)
+    } catch (err: any) {
+      feedback('error');
+      const data = err.response?.data;
+      setServerError(data?.detail || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -105,7 +138,7 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
         device_id,
       });
       feedback('success');
-      onSuccess(form.email, form.phone, accountType === 'org');
+      onSuccess(form.email, form.phone);
     } catch (err: any) {
       feedback('error');
       const data = err.response?.data;
@@ -149,48 +182,6 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
           </View>
         ) : null}
 
-        {/* Account type selector */}
-        <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary, marginBottom: 10 }}>
-          I am registering as
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-          <TouchableOpacity
-            onPress={() => setAccountType('individual')}
-            activeOpacity={0.8}
-            style={{
-              flex: 1, padding: 14, borderRadius: 12, borderWidth: 1.5,
-              alignItems: 'center',
-              backgroundColor: accountType === 'individual' ? colors.primaryTint : colors.surface,
-              borderColor: accountType === 'individual' ? colors.primary : colors.border,
-            }}
-          >
-            <Ionicons name="person-outline" size={22} color={accountType === 'individual' ? colors.primary : colors.textSecondary} />
-            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: accountType === 'individual' ? colors.primary : colors.textPrimary, marginTop: 6 }}>
-              Individual
-            </Text>
-            <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2, textAlign: 'center' }}>
-              Saver, collector, or payer
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setAccountType('org')}
-            activeOpacity={0.8}
-            style={{
-              flex: 1, padding: 14, borderRadius: 12, borderWidth: 1.5,
-              alignItems: 'center',
-              backgroundColor: accountType === 'org' ? colors.primaryTint : colors.surface,
-              borderColor: accountType === 'org' ? colors.primary : colors.border,
-            }}
-          >
-            <Ionicons name="business-outline" size={22} color={accountType === 'org' ? colors.primary : colors.textSecondary} />
-            <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: accountType === 'org' ? colors.primary : colors.textPrimary, marginTop: 6 }}>
-              Organisation
-            </Text>
-            <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 2, textAlign: 'center' }}>
-              MFB, cooperative, or bank
-            </Text>
-          </TouchableOpacity>
-        </View>
 
         <Input
           label="Full Name" placeholder="Ada Okonkwo" value={form.name}
@@ -234,7 +225,18 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
 
         <Divider label="or" />
 
-        <Bouncy onPress={onLogin} style={layout.switchRow}>
+        <TouchableOpacity
+          style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={() => { feedback('light'); googlePromptAsync(); }}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
+          <Text style={{ fontSize: FontSize.base, fontWeight: '600', color: colors.textPrimary, marginLeft: 10 }}>
+            Continue with Google
+          </Text>
+        </TouchableOpacity>
+
+        <Bouncy onPress={onLogin} style={[layout.switchRow, { marginTop: 20 }]}>
           <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' }}>
             Already have an account?{' '}
             <Text style={{ color: colors.primary, fontWeight: '700' }}>Log in</Text>
@@ -260,6 +262,35 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
+
+  const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken;
+      if (idToken) handleGoogleSignIn(idToken);
+    }
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async (idToken: string) => {
+    setLoading(true);
+    setServerError('');
+    try {
+      const { user } = await authService.googleSignIn(idToken);
+      feedback('success');
+      onSuccess(user);
+    } catch (err: any) {
+      feedback('error');
+      const data = err.response?.data;
+      setServerError(data?.detail || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!form.email || !form.password) {
@@ -326,7 +357,18 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
 
         <Divider label="or" />
 
-        <Bouncy onPress={onRegister} style={layout.switchRow}>
+        <TouchableOpacity
+          style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={() => { feedback('light'); googlePromptAsync(); }}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
+          <Text style={{ fontSize: FontSize.base, fontWeight: '600', color: colors.textPrimary, marginLeft: 10 }}>
+            Continue with Google
+          </Text>
+        </TouchableOpacity>
+
+        <Bouncy onPress={onRegister} style={[layout.switchRow, { marginTop: 20 }]}>
           <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, textAlign: 'center' }}>
             Don't have an account?{' '}
             <Text style={{ color: colors.primary, fontWeight: '700' }}>Sign up</Text>
@@ -690,4 +732,12 @@ const layout = StyleSheet.create({
     borderWidth: 1.5,
   },
   sentToRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  googleBtn:     {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+  },
 });

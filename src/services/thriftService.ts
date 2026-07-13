@@ -101,6 +101,17 @@ export interface PaymentStats {
   confirmed: number;
   disputed: number;
   pending: number;
+  total_collected: number;
+  savings_mobilization: number;
+}
+
+export interface CollectorStats {
+  mobilization_rate: number | null;
+  dispute_rate: number | null;
+  total_amount: number;
+  confirmed_amount: number;
+  total_count: number;
+  disputed_count: number;
 }
 
 export interface CollectorReport {
@@ -175,6 +186,11 @@ export const thriftService = {
     return data;
   },
 
+  toggleMemberKyc: async (groupId: number, memberId: number, isKycVerified: boolean): Promise<AjoUser> => {
+    const { data } = await api.patch<AjoUser>(`/api/thrift/${groupId}/members/${memberId}/kyc/`, { is_kyc_verified: isKycVerified });
+    return data;
+  },
+
   // ── Payments ────────────────────────────────────────────────────────────────
   getPayments: async (groupId: number, memberId?: number): Promise<ThriftPayment[]> => {
     const params = memberId ? { member_id: memberId } : {};
@@ -201,7 +217,16 @@ export const thriftService = {
     return data;
   },
 
-  disputePayment: async (groupId: number, paymentId: number, reason: string): Promise<ThriftPayment> => {
+  disputePayment: async (groupId: number, paymentId: number, reason: string, audioUri?: string): Promise<ThriftPayment> => {
+    if (audioUri) {
+      const form = new FormData();
+      if (reason) form.append('reason', reason);
+      form.append('dispute_audio', { uri: audioUri, name: 'dispute.m4a', type: 'audio/m4a' } as any);
+      const { data } = await api.post(`/api/thrift/${groupId}/payments/${paymentId}/dispute/`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return data;
+    }
     const { data } = await api.post(`/api/thrift/${groupId}/payments/${paymentId}/dispute/`, { reason });
     return data;
   },
@@ -303,6 +328,7 @@ export const thriftService = {
     recent_reports: CollectorReport[];
     payers: ThriftMember[];
     payment_stats: PaymentStats;
+    collector_stats: Record<number, CollectorStats>;
   }> => {
     const { data } = await api.get(`/api/thrift/orgs/${orgId}/dashboard/`);
     return data;

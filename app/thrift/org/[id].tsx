@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, StatusBar, TouchableOpacity, StyleSheet,
-  ScrollView, RefreshControl, Alert, Modal,
+  ScrollView, RefreshControl, Alert, Modal, Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -275,6 +275,32 @@ export default function OrgDashboardRoute() {
 
   const pendingCount = data?.pending_collectors?.length ?? 0;
 
+  const handleExport = async () => {
+    if (!data) return;
+    const fmt = (n: number) => n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lines = [
+      `Organisation Report: ${org?.name ?? ''}`,
+      `Generated: ${new Date().toLocaleDateString()}`,
+      '',
+      '=== PAYMENT SUMMARY ===',
+      'Total,Confirmed,Disputed,Pending,Total Collected (₦),Savings Mobilization (%)',
+      `${data.payment_stats.total},${data.payment_stats.confirmed},${data.payment_stats.disputed},${data.payment_stats.pending},${fmt(data.payment_stats.total_collected)},${data.payment_stats.savings_mobilization}`,
+      '',
+      '=== COLLECTORS ===',
+      'Name,Email,Status,Mobilization Rate (%),Dispute Rate (%),₦ Collected,Groups',
+      ...(data.collectors).map((m) => {
+        const st = data.collector_stats?.[m.id];
+        const gCount = data.groups.filter((g) => g.collector.id === m.user.id).length;
+        return `"${m.user.first_name} ${m.user.last_name}","${m.user.email}","${m.status}","${st?.mobilization_rate ?? 'N/A'}","${st?.dispute_rate ?? 'N/A'}","${fmt(st?.confirmed_amount ?? 0)}","${gCount}"`;
+      }),
+      '',
+      '=== GROUPS ===',
+      'Name,Frequency,Cycle Type,Members,Collector',
+      ...(data.groups).map((g) => `"${g.name}","${g.frequency}","${g.cycle_type}","${g.member_count}","${g.collector.first_name} ${g.collector.last_name}"`),
+    ];
+    await Share.share({ message: lines.join('\n'), title: `${org?.name ?? 'Org'} Report` });
+  };
+
   const TABS: { key: Tab; label: string }[] = [
     { key: 'collectors', label: `Collectors (${data?.collectors.length ?? 0})${pendingCount ? ` · ${pendingCount} pending` : ''}` },
     { key: 'groups',     label: `Groups (${data?.groups.length ?? 0})` },
@@ -306,6 +332,11 @@ export default function OrgDashboardRoute() {
             <Ionicons name="shield-checkmark" size={12} color={colors.success} />
             <Text style={{ fontSize: 10, color: colors.success, fontWeight: '700', marginLeft: 3 }}>Verified</Text>
           </View>
+        )}
+        {data && (
+          <TouchableOpacity onPress={handleExport} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }} style={{ marginLeft: 8 }}>
+            <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -341,8 +372,45 @@ export default function OrgDashboardRoute() {
       )}
 
       {!isLoading && !isError && (
+        <View style={{ flex: 1 }}>
+
+        {/* Financial summary banner */}
+        {data && (
+          <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1, backgroundColor: colors.successLight, borderRadius: Radius.md, padding: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.5 }}>TOTAL COLLECTED</Text>
+                <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.success, marginTop: 2 }}>
+                  ₦{data.payment_stats.total_collected.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: colors.primaryTint, borderRadius: Radius.md, padding: 12 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.5 }}>SAVINGS MOBILIZATION</Text>
+                <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.primary, marginTop: 2 }}>
+                  {data.payment_stats.savings_mobilization}%
+                </Text>
+                <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>
+                  {data.payment_stats.confirmed}/{data.payment_stats.total} payments
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Sticky invite button — sits above the scroll area */}
+        {tab === 'collectors' && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, backgroundColor: colors.background }}>
+            <Button
+              label="+ Invite Collector"
+              onPress={() => setInvite(true)}
+              style={{ backgroundColor: colors.primary }}
+            />
+          </View>
+        )}
+
         <ScrollView
-          contentContainerStyle={{ padding: 16 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.primary} colors={[colors.primary]} />}
           showsVerticalScrollIndicator={false}
         >
@@ -350,11 +418,6 @@ export default function OrgDashboardRoute() {
         {/* ── Collectors tab ── */}
         {tab === 'collectors' && (
           <>
-            <Button
-              label="+ Invite Collector"
-              onPress={() => setInvite(true)}
-              style={{ marginBottom: 28, backgroundColor: colors.primary }}
-            />
 
             {/* Pending approval */}
             {(data?.pending_collectors ?? []).length > 0 && (
@@ -409,45 +472,79 @@ export default function OrgDashboardRoute() {
                   key={m.id}
                   onPress={() => setCollectorGroups(m)}
                   activeOpacity={0.8}
-                  style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, flexDirection: 'column', alignItems: 'stretch' }]}
                 >
-                  <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
-                    <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
-                      {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-                      {m.user.first_name} {m.user.last_name}
-                    </Text>
-                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
-                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
-                      <View style={[s.pill, { backgroundColor: m.status === 'active' ? colors.successLight : colors.errorLight }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: m.status === 'active' ? colors.success : colors.error }}>
-                          {m.status.toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={[s.pill, { backgroundColor: colors.primaryTint }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
-                          {groupCount} group{groupCount !== 1 ? 's' : ''}
-                        </Text>
+                  {/* Identity + actions row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={[s.avatar, { backgroundColor: colors.primaryTint }]}>
+                      <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.primary }}>
+                        {m.user.first_name?.[0]?.toUpperCase() ?? '?'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                        {m.user.first_name} {m.user.last_name}
+                      </Text>
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{m.user.email}</Text>
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                        <View style={[s.pill, { backgroundColor: m.status === 'active' ? colors.successLight : colors.errorLight }]}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: m.status === 'active' ? colors.success : colors.error }}>
+                            {m.status.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={[s.pill, { backgroundColor: colors.primaryTint }]}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>
+                            {groupCount} group{groupCount !== 1 ? 's' : ''}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                  <View style={{ gap: 6, alignItems: 'flex-end' }}>
-                    {m.status === 'active' ? (
-                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'suspend')} style={[s.miniBtn, { borderColor: '#F59E0B' }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Suspend</Text>
+                    <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                      {m.status === 'active' ? (
+                        <TouchableOpacity onPress={() => confirmMemberAction(m, 'suspend')} style={[s.miniBtn, { borderColor: '#F59E0B' }]}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Suspend</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity onPress={() => confirmMemberAction(m, 'activate')} style={[s.miniBtn, { borderColor: colors.success }]}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Activate</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'remove')} style={[s.miniBtn, { borderColor: colors.error }]}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Remove</Text>
                       </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity onPress={() => confirmMemberAction(m, 'activate')} style={[s.miniBtn, { borderColor: colors.success }]}>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success }}>Activate</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={() => confirmMemberAction(m, 'remove')} style={[s.miniBtn, { borderColor: colors.error }]}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.error }}>Remove</Text>
-                    </TouchableOpacity>
+                    </View>
                   </View>
+
+                  {/* Performance metrics row */}
+                  {(() => {
+                    const st = data?.collector_stats?.[m.id];
+                    const mob  = st?.mobilization_rate ?? null;
+                    const disp = st?.dispute_rate ?? null;
+                    const mobColor  = mob  === null ? colors.textTertiary : mob  >= 90 ? colors.success : mob  >= 70 ? '#D97706' : colors.error;
+                    const dispColor = disp === null ? colors.textTertiary : disp <=  5 ? colors.success : disp <= 15 ? '#D97706' : colors.error;
+                    return (
+                      <View style={{ flexDirection: 'row', marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textTertiary, letterSpacing: 0.6 }}>MOBILIZATION</Text>
+                          <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: mobColor, marginTop: 2 }}>
+                            {mob === null ? '—' : `${mob}%`}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textTertiary, letterSpacing: 0.6 }}>DISPUTE RATE</Text>
+                          <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: dispColor, marginTop: 2 }}>
+                            {disp === null ? '—' : `${disp}%`}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textTertiary, letterSpacing: 0.6 }}>₦ COLLECTED</Text>
+                          <Text style={{ fontSize: FontSize.base, fontWeight: '800', color: colors.textPrimary, marginTop: 2 }}>
+                            {st ? `₦${st.confirmed_amount.toLocaleString('en-NG', { maximumFractionDigits: 0 })}` : '—'}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </TouchableOpacity>
               );
             })}
@@ -527,6 +624,7 @@ export default function OrgDashboardRoute() {
           </>
         )}
         </ScrollView>
+        </View>
       )}
 
       <InviteModal orgId={orgId} visible={inviteVisible} onClose={() => setInvite(false)} />

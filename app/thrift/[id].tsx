@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StatusBar,
-  StyleSheet, RefreshControl, Modal, TextInput, Share, Image,
+  StyleSheet, RefreshControl, Modal, TextInput, Share, Image, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -282,15 +282,80 @@ function DisputePaymentModal({
 }: { visible: boolean; payment: ThriftPayment | null; groupId: number; onClose: () => void }) {
   const { colors } = useTheme();
   const queryClient = useQueryClient();
-  const [reason, setReason] = useState('');
-  const [err, setErr]       = useState('');
+  const [reason, setReason]         = useState('');
+  const [err, setErr]               = useState('');
+  const [recording, setRecording]   = useState<import('expo-av').Audio.Recording | null>(null);
+  const [audioUri, setAudioUri]     = useState<string | null>(null);
+  const [isPlaying, setIsPlaying]   = useState(false);
+  const [sound, setSound]           = useState<import('expo-av').Audio.Sound | null>(null);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+
+  const startRecording = async () => {
+    try {
+      const { Audio } = await import('expo-av');
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) { setErr('Microphone permission denied.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(rec);
+      setRecSeconds(0);
+      timerRef.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
+    } catch {
+      setErr('Could not start recording.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+    stopTimer();
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setAudioUri(uri ?? null);
+    } catch {
+      setErr('Failed to save recording.');
+    }
+    setRecording(null);
+  };
+
+  const playAudio = async () => {
+    if (!audioUri) return;
+    try {
+      const { Audio } = await import('expo-av');
+      if (sound) { await sound.replayAsync(); return; }
+      const { sound: s } = await Audio.Sound.createAsync({ uri: audioUri });
+      setSound(s);
+      setIsPlaying(true);
+      s.setOnPlaybackStatusUpdate((st) => { if (st.isLoaded && st.didJustFinish) setIsPlaying(false); });
+      await s.playAsync();
+    } catch {
+      setErr('Could not play recording.');
+    }
+  };
+
+  const deleteAudio = async () => {
+    if (sound) { await sound.unloadAsync(); setSound(null); }
+    setAudioUri(null);
+    setIsPlaying(false);
+    setRecSeconds(0);
+  };
+
+  const handleClose = async () => {
+    if (recording) { stopTimer(); try { await recording.stopAndUnloadAsync(); } catch {} setRecording(null); }
+    if (sound) { try { await sound.unloadAsync(); } catch {} setSound(null); }
+    setAudioUri(null); setReason(''); setErr(''); setRecSeconds(0); setIsPlaying(false);
+    onClose();
+  };
 
   const mutation = useMutation({
-    mutationFn: () => thriftService.disputePayment(groupId, payment!.id, reason.trim()),
+    mutationFn: () => thriftService.disputePayment(groupId, payment!.id, reason.trim(), audioUri ?? undefined),
     onSuccess: () => {
       feedback('success');
       queryClient.invalidateQueries({ queryKey: ['thrift-payments', groupId] });
-      setReason(''); setErr('');
+      setReason(''); setErr(''); setAudioUri(null); setRecSeconds(0);
       onClose();
     },
     onError: (e: any) => {
@@ -299,10 +364,12 @@ function DisputePaymentModal({
     },
   });
 
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
   if (!payment) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={m.overlay}>
         <View style={[m.sheet, { backgroundColor: colors.surface }]}>
           <View style={m.handle} />
@@ -310,7 +377,8 @@ function DisputePaymentModal({
           <Text style={[m.sub, { color: colors.textSecondary }]}>
             ₦{Number(payment.amount).toLocaleString()} recorded for {payment.period_date}. Tell us why this is incorrect.
           </Text>
-          <Text style={[m.lbl, { color: colors.textSecondary }]}>Reason</Text>
+
+          <Text style={[m.lbl, { color: colors.textSecondary }]}>Reason (optional if voice note recorded)</Text>
           <TextInput
             value={reason}
             onChangeText={(v) => { setReason(v); setErr(''); }}
@@ -319,18 +387,65 @@ function DisputePaymentModal({
             style={[m.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, height: 90 }]}
             placeholderTextColor={colors.textTertiary}
           />
-          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 6 }}>{err}</Text>}
+
+          {/* Voice note */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 4 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginHorizontal: 10 }}>or record a voice note</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          </View>
+
+          {!recording && !audioUri && (
+            <TouchableOpacity
+              onPress={startRecording}
+              style={[m.voiceBtn, { backgroundColor: colors.primaryTint, borderColor: colors.primaryBorder }]}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="mic-outline" size={20} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: FontSize.sm, marginLeft: 8 }}>Start Recording</Text>
+            </TouchableOpacity>
+          )}
+
+          {!!recording && (
+            <View style={[m.voiceBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA', justifyContent: 'space-between' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444', marginRight: 8 }} />
+                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: FontSize.sm }}>Recording  {fmt(recSeconds)}</Text>
+              </View>
+              <TouchableOpacity onPress={stopRecording} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="stop-circle-outline" size={20} color="#EF4444" />
+                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: FontSize.sm, marginLeft: 4 }}>Stop</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!recording && !!audioUri && (
+            <View style={[m.voiceBtn, { backgroundColor: colors.successLight, borderColor: colors.success, justifyContent: 'space-between' }]}>
+              <TouchableOpacity onPress={playAudio} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name={isPlaying ? 'pause-circle-outline' : 'play-circle-outline'} size={22} color={colors.success} />
+                <Text style={{ color: colors.success, fontWeight: '700', fontSize: FontSize.sm, marginLeft: 6 }}>
+                  {isPlaying ? 'Playing…' : `Play  (${fmt(recSeconds)})`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={deleteAudio}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!!err && <Text style={{ color: colors.error, fontSize: FontSize.xs, marginTop: 8 }}>{err}</Text>}
+
           <TouchableOpacity
             onPress={() => {
-              if (!reason.trim()) { setErr('Please describe why you are disputing this payment.'); return; }
+              if (!reason.trim() && !audioUri) { setErr('Please describe the issue or record a voice note.'); return; }
               mutation.mutate();
             }}
-            disabled={mutation.isPending}
-            style={[m.btn, { backgroundColor: WARNING, marginTop: 20 }]}
+            disabled={mutation.isPending || !!recording}
+            style={[m.btn, { backgroundColor: WARNING, marginTop: 20, opacity: (mutation.isPending || !!recording) ? 0.6 : 1 }]}
           >
             <Text style={m.btnText}>{mutation.isPending ? 'Submitting…' : 'Submit Dispute'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
+          <TouchableOpacity onPress={handleClose} style={[m.btn, { backgroundColor: colors.background, marginTop: 8 }]}>
             <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: FontSize.sm }}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -605,6 +720,32 @@ export default function ThriftGroupDetail() {
     onError: () => feedback('error'),
   });
 
+  const kycMutation = useMutation({
+    mutationFn: ({ memberId, value }: { memberId: number; value: boolean }) =>
+      thriftService.toggleMemberKyc(groupId, memberId, value),
+    onSuccess: () => {
+      feedback('success');
+      queryClient.invalidateQueries({ queryKey: ['thrift-members', groupId] });
+    },
+    onError: () => feedback('error'),
+  });
+
+  const toggleKyc = (mem: ThriftMember) => {
+    const nextValue = !mem.user.is_kyc_verified;
+    const name = `${mem.user.first_name} ${mem.user.last_name}`;
+    Alert.alert(
+      nextValue ? 'Mark as KYC Verified' : 'Remove KYC Verification',
+      nextValue
+        ? `Mark ${name} as KYC verified? This confirms the bank has verified their identity externally.`
+        : `Remove KYC verification for ${name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: nextValue ? 'Verify' : 'Remove', style: nextValue ? 'default' : 'destructive',
+          onPress: () => kycMutation.mutate({ memberId: mem.id, value: nextValue }) },
+      ],
+    );
+  };
+
   const shareInvite = async () => {
     if (!group) return;
     await Share.share({
@@ -839,9 +980,27 @@ export default function ThriftGroupDetail() {
                         </Text>
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-                          {mem.user.first_name} {mem.user.last_name}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                            {mem.user.first_name} {mem.user.last_name}
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => toggleKyc(mem)}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 99,
+                              backgroundColor: mem.user.is_kyc_verified ? colors.successLight : colors.border }}
+                          >
+                            <Ionicons
+                              name={mem.user.is_kyc_verified ? 'shield-checkmark' : 'shield-outline'}
+                              size={9}
+                              color={mem.user.is_kyc_verified ? colors.success : colors.textTertiary}
+                            />
+                            <Text style={{ fontSize: 9, fontWeight: '700', marginLeft: 2,
+                              color: mem.user.is_kyc_verified ? colors.success : colors.textTertiary }}>
+                              KYC
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
                           ₦{Number(mem.personal_amount).toLocaleString()}/period · saved ₦{Number(mem.total_saved).toLocaleString()}
                         </Text>
@@ -1373,5 +1532,6 @@ const m = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: Radius.md, padding: 12, fontSize: FontSize.sm },
   btn: { padding: 14, borderRadius: Radius.md, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700', fontSize: FontSize.sm },
+  voiceBtn: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: Radius.md, borderWidth: 1, marginTop: 8 },
   iconWrap: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
 });

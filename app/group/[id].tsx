@@ -241,6 +241,13 @@ export default function GroupDetailRoute() {
     .filter((p) => p.status === 'approved')
     .reduce((sum, p) => sum + parseFloat(p.amount_entered), 0);
 
+  // Paid members = approved payments in the active cycle (or all if no cycle)
+  const approvedPayments = (payments ?? []).filter((p) => {
+    if (p.status !== 'approved') return false;
+    if (activeCycle) return p.cycle_number === activeCycle.cycle_number;
+    return true;
+  });
+
   // Current collector = member whose slot matches the active cycle number
   const activeCycleNumber = activeCycle?.cycle_number ?? null;
   const currentCollector: CollectionSlot | undefined = activeCycleNumber
@@ -452,6 +459,12 @@ export default function GroupDetailRoute() {
               colors={colors}
               onPress={() => router.push(`/group/${groupId}/payments` as any)}
             />
+            <ActionBtn
+              icon="trophy-outline"
+              label="Who Collected"
+              colors={colors}
+              onPress={() => router.push(`/group/${groupId}/collection-history` as any)}
+            />
             {isGroupAdmin && (
               <ActionBtn
                 icon="refresh-circle-outline"
@@ -475,6 +488,53 @@ export default function GroupDetailRoute() {
                 colors={colors}
                 onPress={() => router.push(`/group/${groupId}/settings` as any)}
               />
+            )}
+          </View>
+
+          {/* ── Paid Members ── */}
+          <View style={[s.section, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }}>
+                Who Has Paid
+              </Text>
+              <View style={[s.paidBadge, { backgroundColor: approvedPayments.length > 0 ? colors.successLight : colors.border }]}>
+                <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: approvedPayments.length > 0 ? colors.success : colors.textSecondary }}>
+                  {paymentsLoading ? '…' : `${approvedPayments.length} / ${group.member_count}`}
+                </Text>
+              </View>
+            </View>
+
+            {paymentsLoading ? (
+              <>
+                <Skeleton width="100%" height={48} radius={Radius.sm} style={{ marginBottom: 8 }} />
+                <Skeleton width="100%" height={48} radius={Radius.sm} />
+              </>
+            ) : approvedPayments.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                <Ionicons name="time-outline" size={28} color={colors.textTertiary} />
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 8 }}>
+                  No payments approved yet this cycle
+                </Text>
+              </View>
+            ) : (
+              approvedPayments.map((p) => (
+                <View key={p.id} style={[s.payRow, { borderBottomColor: colors.border }]}>
+                  <View style={[s.memberInitial, { backgroundColor: colors.primaryTint }]}>
+                    <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: colors.primary }}>
+                      {p.member_name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary }}>
+                      {p.member_name}
+                    </Text>
+                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>
+                      {formatAmt(p.amount_entered)}
+                    </Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+                </View>
+              ))
             )}
           </View>
 
@@ -641,5 +701,17 @@ const s = StyleSheet.create({
     borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  memberInitial: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paidBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
   },
 });

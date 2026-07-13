@@ -17,12 +17,16 @@
       "bundleIdentifier": "com.ajo.app"
     },
     "android": {
+      "package": "com.ajo.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#0035F0"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -40,7 +44,20 @@
         {
           "photosPermission": "Ajo needs access to your photos so you can upload a profile picture and attach payment receipts."
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Ajo needs microphone access to record voice notes when disputing a payment."
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d949d2f0-d2f8-48b1-9fb6-06cb1184534f"
+      }
+    },
+    "owner": "zoeytechteam"
   }
 }

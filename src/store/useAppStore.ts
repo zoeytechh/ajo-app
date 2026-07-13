@@ -17,10 +17,11 @@ export interface AjoUser {
   email: string;
   first_name: string;
   last_name: string;
-  phone_number: string;
+  phone_number: string | null;
   role: 'member' | 'group_admin' | 'super_admin';
   is_email_verified: boolean;
   is_phone_verified: boolean;
+  is_kyc_verified: boolean;
   profile_photo: string | null;
   fcm_token: string | null;
   date_joined: string;
@@ -59,7 +60,10 @@ export const useAuthStore = create<AuthState>()(
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
-      logout: () => set({ user: null, accessToken: null, refreshToken: null }),
+      logout: () => {
+        SecureStore.deleteItemAsync('ajo_pin').catch(() => {});
+        set({ user: null, accessToken: null, refreshToken: null });
+      },
 
       setHasHydrated: (value) => set({ _hasHydrated: value }),
     }),

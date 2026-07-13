@@ -49,6 +49,18 @@ export const authService = {
     return res.data;
   },
 
+  googleSignIn: async (idToken: string): Promise<{ access: string; refresh: string; user: AjoUser }> => {
+    const res = await api.post('/api/auth/google/', { id_token: idToken });
+    const { access, refresh, user } = res.data;
+    useAuthStore.getState().setAuth(user, access, refresh);
+    return res.data;
+  },
+
+  setPhone: async (phone_number: string): Promise<{ detail: string }> => {
+    const res = await api.post('/api/auth/set-phone/', { phone_number });
+    return res.data;
+  },
+
   getMe: async (): Promise<AjoUser> => {
     const res = await api.get('/api/auth/me/');
     useAuthStore.getState().updateUser(res.data);

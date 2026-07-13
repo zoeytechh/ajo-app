@@ -1,13 +1,16 @@
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, AppState, type AppStateStatus } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/hooks/useTheme';
 import { useAuthStore } from '../src/store/useAppStore';
+import { usePinStore } from '../src/store/usePinStore';
+import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
 import { FontSize } from '../src/theme';
 import '../global.css';
@@ -28,11 +31,17 @@ function AuthGuard() {
 
     const currentRoute = segments[0] as string | undefined;
     const isPublicRoute = !currentRoute || PUBLIC_ROUTES.has(currentRoute);
+    const isCompleteProfile = currentRoute === 'complete-profile';
     const isAuthenticated = !!user && !!accessToken;
+    const hasPhone = !!user?.phone_number;
 
-    if (isAuthenticated && isPublicRoute && currentRoute !== 'index') {
-      router.replace('/home');
-    } else if (!isAuthenticated && !isPublicRoute) {
+    if (isAuthenticated) {
+      if (!hasPhone && !isCompleteProfile) {
+        router.replace('/complete-profile');
+      } else if (hasPhone && (isPublicRoute || isCompleteProfile)) {
+        router.replace('/home');
+      }
+    } else if (!isPublicRoute && !isCompleteProfile) {
       router.replace('/login');
     }
   }, [user, accessToken, _hasHydrated, segments]);
@@ -140,10 +149,55 @@ const ts = StyleSheet.create({
 
 function AppShell() {
   const { isDark, colors } = useTheme();
+  const { user, accessToken, _hasHydrated } = useAuthStore();
+  const { isLocked, isSettingUp, hasPinSet, setHasPinSet, beginSetup, lock } = usePinStore();
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const sessionCheckedRef = useRef(false);
+  const isAuth = !!user && !!accessToken;
+  // Only enforce PIN once the user is fully onboarded (has a phone number)
+  const isFullyOnboarded = isAuth && !!user?.phone_number;
 
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
+
+  // On auth hydration check whether a PIN is stored and lock / prompt setup accordingly
+  useEffect(() => {
+    if (!_hasHydrated || !isFullyOnboarded) {
+      if (!isAuth) sessionCheckedRef.current = false;
+      return;
+    }
+    if (sessionCheckedRef.current) return;
+    sessionCheckedRef.current = true;
+
+    SecureStore.getItemAsync('ajo_pin').then((pin) => {
+      if (pin) {
+        setHasPinSet(true);
+        lock();
+      } else {
+        beginSetup();
+      }
+    });
+  }, [_hasHydrated, isFullyOnboarded]);
+
+  // Lock whenever the app goes to background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        appStateRef.current === 'active' &&
+        nextState.match(/inactive|background/) &&
+        hasPinSet
+      ) {
+        lock();
+      }
+      appStateRef.current = nextState;
+    });
+    return () => sub.remove();
+  }, [hasPinSet, lock]);
+
+  if (isFullyOnboarded && (isLocked || isSettingUp)) {
+    return <AppLockScreen mode={isSettingUp ? 'setup' : 'lock'} />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

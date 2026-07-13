@@ -6,8 +6,8 @@ export default function RegisterRoute() {
 
   return (
     <RegisterScreen
-      onSuccess={(email, phone, isOrg) =>
-        router.push({ pathname: '/otp', params: { email, phone, is_org: isOrg ? 'true' : 'false' } })
+      onSuccess={(email, phone) =>
+        router.push({ pathname: '/otp', params: { email, phone } })
       }
       onLogin={() => router.back()}
     />

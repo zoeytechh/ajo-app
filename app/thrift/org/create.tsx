@@ -1,123 +1,70 @@
-import { useState } from 'react';
-import {
-  View, Text, StatusBar, KeyboardAvoidingView,
-  Platform, TouchableOpacity, StyleSheet, ScrollView,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StatusBar, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
-import { thriftService, type OrgType } from '../../../src/services/thriftService';
-import { FontSize, Radius, Shadow } from '../../../src/theme';
-import { Button, Input, LoadingOverlay, feedback } from '../../../src/components';
-
-const ORG_TYPES: { value: OrgType; label: string; desc: string }[] = [
-  { value: 'mfb',         label: 'Microfinance Bank', desc: 'Licensed MFB employing collectors' },
-  { value: 'cooperative', label: 'Cooperative',        desc: 'Member-owned savings cooperative' },
-  { value: 'bank',        label: 'Bank',               desc: 'Commercial or community bank' },
-  { value: 'other',       label: 'Other',              desc: 'Any other thrift organisation' },
-];
+import { FontSize, Radius } from '../../../src/theme';
 
 export default function CreateOrgRoute() {
   const { colors, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const queryClient = useQueryClient();
-
-  const [name, setName]     = useState('');
-  const [orgType, setOrgType] = useState<OrgType>('other');
-  const [regNumber, setReg] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const mutation = useMutation({
-    mutationFn: () => thriftService.createOrg({ name: name.trim(), org_type: orgType, registration_number: regNumber.trim() }),
-    onSuccess: (org) => {
-      feedback('success');
-      queryClient.invalidateQueries({ queryKey: ['thrift-orgs'] });
-      router.replace(`/thrift/org/${org.id}` as any);
-    },
-    onError: (err: any) => {
-      feedback('error');
-      const d = err.response?.data ?? {};
-      setErrors({ name: d.name?.[0] ?? '', general: d.detail ?? 'Something went wrong.' });
-    },
-  });
-
-  const handleSubmit = () => {
-    const e: Record<string, string> = {};
-    if (!name.trim()) e.name = 'Organisation name is required.';
-    if (Object.keys(e).length) { setErrors(e); feedback('error'); return; }
-    setErrors({});
-    mutation.mutate();
-  };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
-      <LoadingOverlay visible={mutation.isPending} message="Creating organisation…" />
 
       <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>New Organisation</Text>
+        <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>Organisation</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={[s.infoBox, { backgroundColor: colors.primaryTint }]}>
-          <Ionicons name="business-outline" size={18} color={colors.primary} />
-          <Text style={{ flex: 1, fontSize: FontSize.xs, color: colors.primary, marginLeft: 8, lineHeight: 18 }}>
-            Creating an organisation lets you manage multiple collectors, monitor all their groups and payments, and receive reports about collector misconduct.
-          </Text>
+      <View style={s.body}>
+        <View style={[s.iconWrap, { backgroundColor: colors.primaryTint }]}>
+          <Ionicons name="business-outline" size={40} color={colors.primary} />
         </View>
 
-        <View style={{ marginTop: 20 }}>
-          <Input
-            label="Organisation name"
-            placeholder="e.g. Lagos MFB Thrift"
-            value={name}
-            onChangeText={(v) => { setName(v); setErrors((p) => ({ ...p, name: '' })); }}
-            error={errors.name}
-            leftIcon={<Ionicons name="business-outline" size={18} color={colors.primary} />}
-          />
+        <Text style={{ fontSize: FontSize.xl, fontWeight: '800', color: colors.textPrimary, marginTop: 24, textAlign: 'center' }}>
+          Organisation Onboarding
+        </Text>
+        <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 12, textAlign: 'center', lineHeight: 22 }}>
+          Organisations are onboarded directly by the Ajo team. This ensures every MFB, cooperative, and bank is properly verified before going live.
+        </Text>
+
+        <View style={[s.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.infoRow}>
+            <View style={[s.bullet, { backgroundColor: colors.successLight }]}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.success} />
+            </View>
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary, marginLeft: 12, lineHeight: 20 }}>
+              Compliance and identity verification
+            </Text>
+          </View>
+          <View style={s.infoRow}>
+            <View style={[s.bullet, { backgroundColor: colors.primaryTint }]}>
+              <Ionicons name="people-outline" size={16} color={colors.primary} />
+            </View>
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary, marginLeft: 12, lineHeight: 20 }}>
+              Dedicated collector management dashboard
+            </Text>
+          </View>
+          <View style={s.infoRow}>
+            <View style={[s.bullet, { backgroundColor: colors.warningLight ?? colors.primaryTint }]}>
+              <Ionicons name="laptop-outline" size={16} color={colors.primary} />
+            </View>
+            <Text style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary, marginLeft: 12, lineHeight: 20 }}>
+              Full web portal for self-service management
+            </Text>
+          </View>
         </View>
 
-        <Input
-          label="Registration number (optional)"
-          placeholder="e.g. RC123456"
-          value={regNumber}
-          onChangeText={setReg}
-          autoCapitalize="characters"
-          style={{ marginTop: 16 }}
-          leftIcon={<Ionicons name="document-text-outline" size={18} color={colors.primary} />}
-        />
-
-        <Text style={[s.label, { color: colors.textPrimary, marginTop: 24 }]}>Organisation type</Text>
-        {ORG_TYPES.map((t) => {
-          const active = orgType === t.value;
-          return (
-            <TouchableOpacity key={t.value} onPress={() => setOrgType(t.value)} activeOpacity={0.8}
-              style={[s.optionRow, { backgroundColor: active ? colors.primaryTint : colors.surface, borderColor: active ? colors.primary : colors.border, ...Shadow.card(colors.black) }]}
-            >
-              <View style={[s.dot, { backgroundColor: active ? colors.primary : colors.border }]} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: active ? colors.primary : colors.textPrimary }}>{t.label}</Text>
-                <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>{t.desc}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        {errors.general ? (
-          <Text style={{ color: colors.error, fontSize: FontSize.sm, marginTop: 12, textAlign: 'center' }}>{errors.general}</Text>
-        ) : null}
-
-        <Button label="Create Organisation" onPress={handleSubmit} loading={mutation.isPending} style={{ marginTop: 32 }} />
-        <View style={{ height: insets.bottom + 80 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 28, textAlign: 'center', lineHeight: 20 }}>
+          To get your organisation onboarded, reach out to us at{' '}
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>support@ajo.app</Text>
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -126,12 +73,18 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
-  body: { paddingHorizontal: 24, paddingTop: 24 },
-  label: { fontSize: FontSize.sm, fontWeight: '600', marginBottom: 10 },
-  infoBox: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderRadius: Radius.md },
-  optionRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, borderRadius: Radius.md, borderWidth: 1.5, marginBottom: 10,
+  body: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32, paddingBottom: 40,
   },
-  dot: { width: 18, height: 18, borderRadius: 9 },
+  iconWrap: {
+    width: 80, height: 80, borderRadius: 40,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  infoCard: {
+    width: '100%', borderRadius: Radius.lg, borderWidth: 1,
+    padding: 16, marginTop: 28, gap: 14,
+  },
+  infoRow: { flexDirection: 'row', alignItems: 'center' },
+  bullet: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });

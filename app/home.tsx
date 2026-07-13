@@ -173,7 +173,6 @@ export default function HomeRoute() {
   const joinedThriftGroups = thriftGroups?.filter((g) => g.collector.id !== user?.id) ?? [];
   const isOrgAdmin = (myOrgs ?? []).length > 0;
   // Users with any thrift involvement (collector or payer) only see Contributions — no Ajo tab
-  const hasThriftInvolvement = myThriftGroups.length > 0 || joinedThriftGroups.length > 0;
 
   const isLoading   = tab === 'ajo' ? ajoLoading   : thriftLoading;
   const isError     = tab === 'ajo' ? ajoError     : thriftError;
@@ -262,19 +261,17 @@ export default function HomeRoute() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Ajo / Thrift Toggle — hidden for thrift collectors and payers ── */}
-      {!hasThriftInvolvement && (
-        <View style={[s.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          {(['ajo', 'thrift'] as const).map((t) => (
-            <TouchableOpacity key={t} onPress={() => setTab(t)} style={s.tabBtn} activeOpacity={0.8}>
-              <Text style={[s.tabLabel, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '400' }]}>
-                {t === 'ajo' ? 'Ajo Groups' : 'Contributions'}
-              </Text>
-              {tab === t && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {/* ── Ajo / Contributions Toggle ── */}
+      <View style={[s.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        {(['ajo', 'thrift'] as const).map((t) => (
+          <TouchableOpacity key={t} onPress={() => setTab(t)} style={s.tabBtn} activeOpacity={0.8}>
+            <Text style={[s.tabLabel, { color: tab === t ? colors.primary : colors.textSecondary, fontWeight: tab === t ? '700' : '400' }]}>
+              {t === 'ajo' ? 'Ajo Groups' : 'Contributions'}
+            </Text>
+            {tab === t && <View style={[s.tabUnderline, { backgroundColor: colors.primary }]} />}
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* ── Body ── */}
       <ScrollView

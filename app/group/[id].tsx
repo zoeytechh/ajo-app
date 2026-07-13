@@ -517,24 +517,28 @@ export default function GroupDetailRoute() {
                 </Text>
               </View>
             ) : (
-              approvedPayments.map((p) => (
-                <View key={p.id} style={[s.payRow, { borderBottomColor: colors.border }]}>
-                  <View style={[s.memberInitial, { backgroundColor: colors.primaryTint }]}>
-                    <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: colors.primary }}>
-                      {p.member_name.charAt(0).toUpperCase()}
-                    </Text>
+              approvedPayments.map((p) => {
+                const name    = p.member_name || 'Unknown';
+                const initial = name.charAt(0).toUpperCase();
+                return (
+                  <View key={p.id} style={[s.payRow, { borderBottomColor: colors.border }]}>
+                    <View style={[s.memberInitial, { backgroundColor: colors.primaryTint }]}>
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: colors.primary }}>
+                        {initial}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary }}>
+                        {name}
+                      </Text>
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>
+                        {formatAmt(p.amount_entered ?? '0')}
+                      </Text>
+                    </View>
+                    <Ionicons name="checkmark-circle" size={22} color={colors.success} />
                   </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textPrimary }}>
-                      {p.member_name}
-                    </Text>
-                    <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 1 }}>
-                      {formatAmt(p.amount_entered)}
-                    </Text>
-                  </View>
-                  <Ionicons name="checkmark-circle" size={22} color={colors.success} />
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 

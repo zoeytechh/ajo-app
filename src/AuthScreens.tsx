@@ -78,9 +78,9 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
   const [serverError, setServerError] = useState('');
 
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
   });
 
   useEffect(() => {
@@ -227,7 +227,8 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
 
         <TouchableOpacity
           style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => { feedback('light'); googlePromptAsync(); }}
+          onPress={() => { feedback('light'); googlePromptAsync?.(); }}
+          disabled={!googlePromptAsync}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
@@ -264,9 +265,9 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
   const [serverError, setServerError] = useState('');
 
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
   });
 
   useEffect(() => {
@@ -359,7 +360,8 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
 
         <TouchableOpacity
           style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => { feedback('light'); googlePromptAsync(); }}
+          onPress={() => { feedback('light'); googlePromptAsync?.(); }}
+          disabled={!googlePromptAsync}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="google" size={20} color="#DB4437" />

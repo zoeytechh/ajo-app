@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/ajo-logo.svg",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },

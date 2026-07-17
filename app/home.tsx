@@ -442,6 +442,27 @@ export default function HomeRoute() {
         ) : (
           /* ── Inventory content ── */
           <>
+            {/* Quick-action bar */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+              {[
+                { icon: 'bar-chart-outline', label: 'Dashboard', route: '/inventory/dashboard' },
+                { icon: 'cart-outline', label: 'Record Sale', route: '/inventory/new-sale' },
+                { icon: 'receipt-outline', label: 'Expenses', route: '/inventory/expenses' },
+                { icon: 'people-outline', label: 'Customers', route: '/inventory/customers' },
+                { icon: 'business-outline', label: 'My Business', route: '/inventory/business' },
+              ].map(({ icon, label, route }) => (
+                <TouchableOpacity
+                  key={route}
+                  onPress={() => router.push(route as any)}
+                  activeOpacity={0.8}
+                  style={{ backgroundColor: '#FFF3E0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, alignItems: 'center', flexDirection: 'row', gap: 6 }}
+                >
+                  <Ionicons name={icon as any} size={16} color="#E65100" />
+                  <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: '#E65100' }}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             {(categories ?? []).length > 0 ? (
               <>
                 <SectionTitle label="My Inventory Categories" />

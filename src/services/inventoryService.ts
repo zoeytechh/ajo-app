@@ -96,3 +96,139 @@ export const recordMovement = (
   data: { movement_type: MovementType; quantity: number; note?: string },
 ): Promise<InventoryMovement> =>
   api.post(`/api/inventory/products/${prodId}/movements/`, data).then(r => r.data);
+
+// ─── Business profile ─────────────────────────────────────────────────────────
+
+export interface InventoryBusiness {
+  id: number;
+  name: string;
+  business_type: string;
+  address: string;
+  phone: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getBusiness = (): Promise<InventoryBusiness | null> =>
+  api.get('/api/inventory/business/').then(r => r.data);
+
+export const saveBusiness = (data: Partial<Omit<InventoryBusiness, 'id' | 'created_at' | 'updated_at'>>): Promise<InventoryBusiness> =>
+  api.put('/api/inventory/business/', data).then(r => r.data);
+
+// ─── Customers ────────────────────────────────────────────────────────────────
+
+export interface InventoryCustomer {
+  id: number;
+  name: string;
+  phone: string;
+  notes: string;
+  created_at: string;
+}
+
+export const getCustomers = (): Promise<InventoryCustomer[]> =>
+  api.get('/api/inventory/customers/').then(r => r.data);
+
+export const createCustomer = (data: { name: string; phone?: string; notes?: string }): Promise<InventoryCustomer> =>
+  api.post('/api/inventory/customers/', data).then(r => r.data);
+
+export const updateCustomer = (id: number, data: Partial<{ name: string; phone: string; notes: string }>): Promise<InventoryCustomer> =>
+  api.patch(`/api/inventory/customers/${id}/`, data).then(r => r.data);
+
+export const deleteCustomer = (id: number): Promise<void> =>
+  api.delete(`/api/inventory/customers/${id}/`).then(() => undefined);
+
+// ─── Sales ────────────────────────────────────────────────────────────────────
+
+export interface InventorySaleItem {
+  id: number;
+  product: number | null;
+  product_name: string;
+  quantity: number;
+  unit_price: string;
+  subtotal: string;
+}
+
+export interface InventorySale {
+  id: number;
+  customer: number | null;
+  customer_name: string | null;
+  total: string;
+  notes: string;
+  sold_at: string;
+  items: InventorySaleItem[];
+}
+
+export interface CreateSaleItemPayload {
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+}
+
+export const getSales = (): Promise<InventorySale[]> =>
+  api.get('/api/inventory/sales/').then(r => r.data);
+
+export const recordSale = (data: {
+  customer_id?: number | null;
+  notes?: string;
+  items: CreateSaleItemPayload[];
+}): Promise<InventorySale> =>
+  api.post('/api/inventory/sales/', data).then(r => r.data);
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+export type ExpenseCategory = 'rent' | 'transport' | 'supplies' | 'salary' | 'utility' | 'other';
+
+export interface InventoryExpense {
+  id: number;
+  category: ExpenseCategory;
+  category_label: string;
+  description: string;
+  amount: string;
+  spent_at: string;
+  created_at: string;
+}
+
+export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
+  { value: 'rent',      label: 'Rent' },
+  { value: 'transport', label: 'Transport' },
+  { value: 'supplies',  label: 'Supplies' },
+  { value: 'salary',    label: 'Salary' },
+  { value: 'utility',   label: 'Utility' },
+  { value: 'other',     label: 'Other' },
+];
+
+export const getExpenses = (): Promise<InventoryExpense[]> =>
+  api.get('/api/inventory/expenses/').then(r => r.data);
+
+export const createExpense = (data: {
+  category: ExpenseCategory;
+  description?: string;
+  amount: number;
+  spent_at: string;
+}): Promise<InventoryExpense> =>
+  api.post('/api/inventory/expenses/', data).then(r => r.data);
+
+export const updateExpense = (id: number, data: Partial<{
+  category: ExpenseCategory; description: string; amount: number; spent_at: string;
+}>): Promise<InventoryExpense> =>
+  api.patch(`/api/inventory/expenses/${id}/`, data).then(r => r.data);
+
+export const deleteExpense = (id: number): Promise<void> =>
+  api.delete(`/api/inventory/expenses/${id}/`).then(() => undefined);
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export interface InventoryDashboard {
+  date: string;
+  revenue: string;
+  expenses: string;
+  profit: string;
+  opening_stock: number;
+  closing_stock: number;
+  low_stock_items: { id: number; name: string; quantity: number }[];
+}
+
+export const getDashboard = (date?: string): Promise<InventoryDashboard> => {
+  const params = date ? `?date=${date}` : '';
+  return api.get(`/api/inventory/dashboard/${params}`).then(r => r.data);
+};

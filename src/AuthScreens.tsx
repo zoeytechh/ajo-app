@@ -9,6 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 import { FontSize, Radius } from './theme';
 import { Button, Input, Divider, OTPBox, LoadingOverlay, Bouncy, feedback } from './components';
 import Svg, { Path } from 'react-native-svg';
@@ -77,16 +78,32 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
 
+  const redirectUri = makeRedirectUri({ scheme: 'ajo', path: 'oauthredirect' });
+
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
+    redirectUri,
   });
 
   useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const idToken = googleResponse.authentication?.idToken;
-      if (idToken) handleGoogleSignIn(idToken);
+    if (!googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken
+        ?? (googleResponse.params as any)?.id_token;
+      if (idToken) {
+        handleGoogleSignIn(idToken);
+      } else {
+        setLoading(false);
+        setServerError('Google returned no credentials. Add "' + redirectUri + '" to Authorized redirect URIs in Google Cloud Console, then try again.');
+      }
+    } else if (googleResponse.type === 'error') {
+      setLoading(false);
+      const code = (googleResponse as any).error?.code ?? '';
+      if (code !== 'ERR_AUTH_DISMISSED') {
+        setServerError(googleResponse.error?.message || 'Google sign-in failed. Please try again.');
+      }
     }
   }, [googleResponse]);
 
@@ -227,8 +244,14 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
 
         <TouchableOpacity
           style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => { feedback('light'); googlePromptAsync?.(); }}
-          disabled={!googlePromptAsync}
+          onPress={() => {
+            feedback('light');
+            if (!googlePromptAsync) {
+              setServerError('Google sign-in is not available on this device. Please use email & password.');
+              return;
+            }
+            googlePromptAsync();
+          }}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
@@ -264,16 +287,32 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
 
+  const redirectUri = makeRedirectUri({ scheme: 'ajo', path: 'oauthredirect' });
+
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
+    redirectUri,
   });
 
   useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const idToken = googleResponse.authentication?.idToken;
-      if (idToken) handleGoogleSignIn(idToken);
+    if (!googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken
+        ?? (googleResponse.params as any)?.id_token;
+      if (idToken) {
+        handleGoogleSignIn(idToken);
+      } else {
+        setLoading(false);
+        setServerError('Google returned no credentials. Add "' + redirectUri + '" to Authorized redirect URIs in Google Cloud Console, then try again.');
+      }
+    } else if (googleResponse.type === 'error') {
+      setLoading(false);
+      const code = (googleResponse as any).error?.code ?? '';
+      if (code !== 'ERR_AUTH_DISMISSED') {
+        setServerError(googleResponse.error?.message || 'Google sign-in failed. Please try again.');
+      }
     }
   }, [googleResponse]);
 
@@ -360,8 +399,14 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
 
         <TouchableOpacity
           style={[layout.googleBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => { feedback('light'); googlePromptAsync?.(); }}
-          disabled={!googlePromptAsync}
+          onPress={() => {
+            feedback('light');
+            if (!googlePromptAsync) {
+              setServerError('Google sign-in is not available on this device. Please use email & password.');
+              return;
+            }
+            googlePromptAsync();
+          }}
           activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="google" size={20} color="#DB4437" />

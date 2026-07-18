@@ -63,7 +63,7 @@ export default function NewSaleScreen() {
 
   const addToCart = (product: InventoryProduct) => {
     const qty = parseInt(qtyInput[product.id] ?? '1', 10) || 1;
-    const price = parseFloat(priceInput[product.id] ?? String(product.price)) || parseFloat(String(product.price));
+    const price = parseFloat(priceInput[product.id] ?? product.effective_price) || parseFloat(product.effective_price);
     if (qty > product.quantity) {
       return Alert.alert('Insufficient Stock', `Only ${product.quantity} units available.`);
     }
@@ -249,9 +249,11 @@ export default function NewSaleScreen() {
                           />
                         </View>
                         <View style={{ flex: 2 }}>
-                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>Unit Price (₦)</Text>
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>
+                            Unit Price (₦){parseFloat(p.discount_percent) > 0 ? ` · ${p.discount_percent}% off` : ''}
+                          </Text>
                           <TextInput
-                            value={priceInput[p.id] ?? String(p.price)}
+                            value={priceInput[p.id] ?? p.effective_price}
                             onChangeText={v => setPriceInput(prev => ({ ...prev, [p.id]: v }))}
                             keyboardType="decimal-pad"
                             style={[s.miniInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}

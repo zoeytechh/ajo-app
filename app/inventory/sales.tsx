@@ -1,0 +1,200 @@
+import React, { useState } from 'react';
+import {
+  View, Text, TouchableOpacity, ScrollView,
+  StyleSheet, ActivityIndicator, RefreshControl, Share, Alert,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/hooks/useTheme';
+import { FontSize, Radius, Shadow } from '../../src/theme';
+import { getSales, getBusiness, type InventorySale } from '../../src/services/inventoryService';
+
+const INV = '#E65100';
+
+function buildReceiptText(sale: InventorySale, businessName: string): string {
+  const lines: string[] = [];
+  lines.push(`🧾 *${businessName || 'Sales Receipt'}*`);
+  lines.push(`Date: ${new Date(sale.sold_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}`);
+  if (sale.customer_name) lines.push(`Customer: ${sale.customer_name}`);
+  lines.push('');
+  lines.push('*Items:*');
+  sale.items.forEach(item => {
+    lines.push(`• ${item.product_name} × ${item.quantity}  →  ₦${Number(item.subtotal).toLocaleString()}`);
+  });
+  lines.push('');
+  lines.push(`*Total: ₦${Number(sale.total).toLocaleString()}*`);
+  if (sale.notes) lines.push(`\nNote: ${sale.notes}`);
+  lines.push('\n_Thank you for your purchase!_');
+  return lines.join('\n');
+}
+
+export default function SalesHistoryScreen() {
+  const { colors } = useTheme();
+  const router = useRouter();
+
+  const { data: sales, isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ['inventory-sales'],
+    queryFn: getSales,
+  });
+
+  const { data: biz } = useQuery({
+    queryKey: ['inventory-business'],
+    queryFn: getBusiness,
+  });
+
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  const shareReceipt = async (sale: InventorySale) => {
+    const text = buildReceiptText(sale, biz?.name ?? '');
+    try {
+      await Share.share({ message: text });
+    } catch {
+      Alert.alert('Error', 'Could not share receipt.');
+    }
+  };
+
+  const totalRevenue = (sales ?? []).reduce((s, sale) => s + parseFloat(sale.total), 0);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={[s.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          <Text style={{ fontSize: FontSize.lg, fontWeight: '800', color: colors.textPrimary }}>Sales History</Text>
+          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+            {(sales ?? []).length} transactions · ₦{totalRevenue.toLocaleString()} total
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/inventory/new-sale' as any)}
+          style={[s.addBtn, { backgroundColor: INV }]}
+        >
+          <Ionicons name="add" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {isLoading ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={INV} />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={INV} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {(sales ?? []).length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+              <Ionicons name="cart-outline" size={56} color={colors.textTertiary} />
+              <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 14 }}>No sales yet</Text>
+              <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 6, textAlign: 'center' }}>
+                Record your first sale to start tracking revenue.
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/inventory/new-sale' as any)}
+                style={[s.emptyBtn, { backgroundColor: INV }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: FontSize.sm }}>Record Sale</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            (sales ?? []).map((sale) => {
+              const isOpen = expanded === sale.id;
+              const date = new Date(sale.sold_at);
+              return (
+                <View key={sale.id} style={[s.card, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}>
+                  {/* Summary row */}
+                  <TouchableOpacity
+                    onPress={() => setExpanded(isOpen ? null : sale.id)}
+                    activeOpacity={0.8}
+                    style={s.cardTop}
+                  >
+                    <View style={[s.dateBadge, { backgroundColor: '#FFF3E0' }]}>
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '800', color: INV }}>
+                        {date.getDate()}
+                      </Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: INV }}>
+                        {date.toLocaleString('en-NG', { month: 'short' }).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                        {sale.customer_name ?? 'Walk-in customer'}
+                      </Text>
+                      <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 2 }}>
+                        {sale.items.length} item{sale.items.length !== 1 ? 's' : ''} · {date.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: FontSize.sm, fontWeight: '800', color: colors.textPrimary }}>
+                        ₦{Number(sale.total).toLocaleString()}
+                      </Text>
+                      <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textTertiary} style={{ marginTop: 4 }} />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Expanded items */}
+                  {isOpen && (
+                    <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+                      {sale.items.map((item, i) => (
+                        <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, flex: 1 }}>
+                            {item.product_name} × {item.quantity} @ ₦{Number(item.unit_price).toLocaleString()}
+                          </Text>
+                          <Text style={{ fontSize: FontSize.xs, fontWeight: '700', color: colors.textPrimary }}>
+                            ₦{Number(item.subtotal).toLocaleString()}
+                          </Text>
+                        </View>
+                      ))}
+                      {!!sale.notes && (
+                        <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginTop: 6, fontStyle: 'italic' }}>
+                          Note: {sale.notes}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => shareReceipt(sale)}
+                        style={[s.shareBtn, { borderColor: INV }]}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="share-social-outline" size={16} color={INV} />
+                        <Text style={{ color: INV, fontWeight: '700', fontSize: FontSize.xs, marginLeft: 6 }}>
+                          Share Receipt (WhatsApp)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 18, borderBottomWidth: 1,
+  },
+  addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  card: { borderRadius: Radius.lg, padding: 14, marginBottom: 10 },
+  cardTop: { flexDirection: 'row', alignItems: 'center' },
+  dateBadge: {
+    width: 42, height: 42, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderRadius: Radius.md,
+    paddingVertical: 10, marginTop: 10,
+  },
+  emptyBtn: {
+    marginTop: 20, paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: Radius.lg,
+  },
+});

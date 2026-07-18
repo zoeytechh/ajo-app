@@ -23,6 +23,10 @@ export interface InventoryProduct {
   category_name: string;
   name: string;
   price: string;
+  discount_percent: string;
+  effective_price: string;
+  image: string | null;
+  image_url: string | null;
   quantity: number;
   custom_fields: Record<string, string | number>;
   created_at: string;
@@ -232,3 +236,27 @@ export const getDashboard = (date?: string): Promise<InventoryDashboard> => {
   const params = date ? `?date=${date}` : '';
   return api.get(`/api/inventory/dashboard/${params}`).then(r => r.data);
 };
+
+// ─── Best Sellers ─────────────────────────────────────────────────────────────
+
+export interface BestSeller {
+  product_name: string;
+  total_qty: number;
+  total_revenue: string;
+}
+
+export const getBestSellers = (days = 30, limit = 10): Promise<BestSeller[]> =>
+  api.get(`/api/inventory/best-sellers/?days=${days}&limit=${limit}`).then(r => r.data);
+
+// ─── Revenue Analytics ────────────────────────────────────────────────────────
+
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly';
+
+export interface AnalyticsPoint {
+  label: string;
+  revenue: number;
+  expense: number;
+}
+
+export const getAnalytics = (period: AnalyticsPeriod = 'daily', days = 30): Promise<AnalyticsPoint[]> =>
+  api.get(`/api/inventory/analytics/?period=${period}&days=${days}`).then(r => r.data);

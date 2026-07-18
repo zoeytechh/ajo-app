@@ -445,11 +445,14 @@ export default function HomeRoute() {
             {/* Quick-action bar */}
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               {[
-                { icon: 'bar-chart-outline', label: 'Dashboard', route: '/inventory/dashboard' },
-                { icon: 'cart-outline', label: 'Record Sale', route: '/inventory/new-sale' },
-                { icon: 'receipt-outline', label: 'Expenses', route: '/inventory/expenses' },
-                { icon: 'people-outline', label: 'Customers', route: '/inventory/customers' },
-                { icon: 'business-outline', label: 'My Business', route: '/inventory/business' },
+                { icon: 'bar-chart-outline',  label: 'Dashboard',    route: '/inventory/dashboard' },
+                { icon: 'cart-outline',        label: 'Record Sale',  route: '/inventory/new-sale' },
+                { icon: 'time-outline',        label: 'Sales',        route: '/inventory/sales' },
+                { icon: 'receipt-outline',     label: 'Expenses',     route: '/inventory/expenses' },
+                { icon: 'people-outline',      label: 'Customers',    route: '/inventory/customers' },
+                { icon: 'podium-outline',      label: 'Best Sellers', route: '/inventory/best-sellers' },
+                { icon: 'trending-up-outline', label: 'Analytics',    route: '/inventory/analytics' },
+                { icon: 'business-outline',    label: 'My Business',  route: '/inventory/business' },
               ].map(({ icon, label, route }) => (
                 <TouchableOpacity
                   key={route}

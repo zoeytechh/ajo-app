@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView,
+  Platform, Image, ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { FontSize, Radius } from '../../../src/theme';
 import { getCategories, createProduct } from '../../../src/services/inventoryService';
 import { getCategoryEmoji } from '../../../src/utils/inventoryHelpers';
+import api from '../../../src/services/api';
+
+const INV = '#E65100';
 
 export default function AddProductScreen() {
   const { catId } = useLocalSearchParams<{ catId: string }>();
@@ -24,32 +29,74 @@ export default function AddProductScreen() {
   });
   const cat = categories?.find(c => c.id === catIdNum);
 
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [name, setName]             = useState('');
+  const [price, setPrice]           = useState('');
+  const [quantity, setQuantity]     = useState('');
+  const [discount, setDiscount]     = useState('');
+  const [imageUri, setImageUri]     = useState<string | null>(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () =>
-      createProduct(catIdNum, {
+    mutationFn: async () => {
+      // First create the product
+      const product = await createProduct(catIdNum, {
         name: name.trim(),
         price,
         quantity: parseInt(quantity, 10) || 0,
-      }),
+        discount_percent: discount ? parseFloat(discount) : 0,
+      } as any);
+
+      // If image selected, upload it separately via PATCH
+      if (imageUri) {
+        setUploadingImg(true);
+        const form = new FormData();
+        const filename = imageUri.split('/').pop() ?? 'product.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        form.append('image', { uri: imageUri, name: filename, type } as any);
+        await api.patch(`/api/inventory/products/${product.id}/`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setUploadingImg(false);
+      }
+      return product;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
       qc.invalidateQueries({ queryKey: ['inventory-categories'] });
       router.back();
     },
-    onError: () => Alert.alert('Error', 'Could not save product. Please try again.'),
+    onError: () => {
+      setUploadingImg(false);
+      Alert.alert('Error', 'Could not save product. Please try again.');
+    },
   });
 
   const handleSave = () => {
     if (!name.trim()) return Alert.alert('Missing info', 'What is the name of this product?');
     if (!price || isNaN(parseFloat(price))) return Alert.alert('Missing info', 'Enter the selling price.');
+    if (discount && (parseFloat(discount) < 0 || parseFloat(discount) > 100)) {
+      return Alert.alert('Invalid', 'Discount must be between 0 and 100.');
+    }
     mutate();
   };
 
   const emoji = cat ? getCategoryEmoji(cat.name) : '📦';
+  const discountedPrice = price && discount
+    ? (parseFloat(price) * (1 - parseFloat(discount) / 100)).toFixed(2)
+    : null;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -63,28 +110,41 @@ export default function AddProductScreen() {
         </Text>
       </View>
 
-      <View style={s.body}>
+      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
         {/* Category badge */}
         {cat && (
           <View style={[s.catBadge, { backgroundColor: '#FFF3E0' }]}>
             <Text style={{ fontSize: 16 }}>{emoji}</Text>
-            <Text style={{ fontSize: FontSize.sm, color: '#E65100', fontWeight: '600', marginLeft: 8 }}>{cat.name}</Text>
+            <Text style={{ fontSize: FontSize.sm, color: INV, fontWeight: '600', marginLeft: 8 }}>{cat.name}</Text>
           </View>
         )}
+
+        {/* Product image */}
+        <Text style={[s.label, { color: colors.textSecondary }]}>Product Photo (optional)</Text>
+        <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={[s.imagePicker, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={s.productImage} />
+          ) : (
+            <View style={{ alignItems: 'center' }}>
+              <Ionicons name="camera-outline" size={28} color={colors.textTertiary} />
+              <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginTop: 4 }}>Tap to add photo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Product name */}
         <Text style={[s.label, { color: colors.textSecondary }]}>What is this product called?</Text>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Indomie noodles, Blue T-shirt, iPhone 15..."
+          placeholder="e.g. Indomie noodles, Blue T-shirt..."
           placeholderTextColor={colors.textTertiary}
           style={[s.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
           autoFocus
         />
 
         {/* Price */}
-        <Text style={[s.label, { color: colors.textSecondary }]}>How much do you sell it for? (₦)</Text>
+        <Text style={[s.label, { color: colors.textSecondary }]}>Selling price (₦)</Text>
         <View style={[s.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={{ fontSize: FontSize.md, color: colors.textSecondary, marginRight: 6 }}>₦</Text>
           <TextInput
@@ -96,6 +156,25 @@ export default function AddProductScreen() {
             style={{ flex: 1, fontSize: FontSize.md, color: colors.textPrimary }}
           />
         </View>
+
+        {/* Discount */}
+        <Text style={[s.label, { color: colors.textSecondary, marginTop: 4 }]}>Discount % (optional)</Text>
+        <View style={[s.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TextInput
+            value={discount}
+            onChangeText={setDiscount}
+            keyboardType="decimal-pad"
+            placeholder="0"
+            placeholderTextColor={colors.textTertiary}
+            style={{ flex: 1, fontSize: FontSize.md, color: colors.textPrimary }}
+          />
+          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>%</Text>
+        </View>
+        {discountedPrice && (
+          <Text style={{ fontSize: FontSize.xs, color: INV, marginBottom: 12, marginTop: -8 }}>
+            Discounted price: ₦{Number(discountedPrice).toLocaleString()}
+          </Text>
+        )}
 
         {/* Quantity */}
         <Text style={[s.label, { color: colors.textSecondary, marginTop: 4 }]}>How many do you have right now?</Text>
@@ -114,19 +193,23 @@ export default function AddProductScreen() {
           <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>pieces / units</Text>
         </View>
 
-        {/* Save button */}
         <TouchableOpacity
           onPress={handleSave}
           disabled={isPending}
-          style={[s.saveBtn, { backgroundColor: '#E65100', marginTop: 28 }]}
+          style={[s.saveBtn, { backgroundColor: INV, marginTop: 28, opacity: isPending ? 0.6 : 1 }]}
           activeOpacity={0.85}
         >
           {isPending
-            ? <ActivityIndicator color="#fff" />
+            ? <>
+                <ActivityIndicator color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: FontSize.sm, marginLeft: 8 }}>
+                  {uploadingImg ? 'Uploading image…' : 'Saving…'}
+                </Text>
+              </>
             : <Text style={{ color: '#fff', fontWeight: '800', fontSize: FontSize.md }}>Save Product</Text>
           }
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -136,7 +219,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
-  body: { padding: 24 },
+  body: { padding: 24, paddingBottom: 60 },
   catBadge: {
     flexDirection: 'row', alignItems: 'center',
     alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6,
@@ -151,10 +234,18 @@ const s = StyleSheet.create({
   inputRow: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1.5, borderRadius: Radius.md,
-    paddingHorizontal: 14, paddingVertical: 13, marginBottom: 20,
+    paddingHorizontal: 14, paddingVertical: 13, marginBottom: 12,
   },
   saveBtn: {
     paddingVertical: 16, borderRadius: Radius.lg,
     alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row',
   },
+  imagePicker: {
+    height: 120, borderRadius: Radius.lg,
+    borderWidth: 1.5, borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 20, overflow: 'hidden',
+  },
+  productImage: { width: '100%', height: '100%', resizeMode: 'cover' },
 });

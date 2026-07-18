@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -92,12 +92,28 @@ export default function ProductDetailScreen() {
         {/* Stock info card */}
         {product && (
           <View style={[s.infoCard, { backgroundColor: '#FFF3E0' }]}>
+            {/* Product image */}
+            {product.image_url && (
+              <Image source={{ uri: product.image_url }} style={s.productImg} />
+            )}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <View>
                 <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontWeight: '600' }}>SELLING PRICE</Text>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: '#E65100', marginTop: 4 }}>
-                  ₦{parseFloat(product.price).toLocaleString()}
-                </Text>
+                {parseFloat(product.discount_percent) > 0 ? (
+                  <>
+                    <Text style={{ fontSize: FontSize.sm, color: '#BF360C', textDecorationLine: 'line-through', marginTop: 4 }}>
+                      ₦{parseFloat(product.price).toLocaleString()}
+                    </Text>
+                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#E65100' }}>
+                      ₦{parseFloat(product.effective_price).toLocaleString()}
+                      <Text style={{ fontSize: FontSize.xs, fontWeight: '600' }}> ({product.discount_percent}% off)</Text>
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={{ fontSize: 28, fontWeight: '900', color: '#E65100', marginTop: 4 }}>
+                    ₦{parseFloat(product.price).toLocaleString()}
+                  </Text>
+                )}
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontWeight: '600' }}>STOCK</Text>
@@ -209,7 +225,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1,
   },
   body: { padding: 20 },
-  infoCard: { borderRadius: Radius.xl ?? Radius.lg, padding: 20, marginBottom: 24 },
+  infoCard: { borderRadius: Radius.xl ?? Radius.lg, padding: 20, marginBottom: 24, overflow: 'hidden' },
+  productImg: { width: '100%', height: 160, borderRadius: 8, marginBottom: 14, resizeMode: 'cover' },
   statusBar: {
     flexDirection: 'row', alignItems: 'center',
     marginTop: 14, padding: 10, borderRadius: Radius.md,

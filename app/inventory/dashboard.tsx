@@ -121,11 +121,19 @@ export default function InventoryDashboardScreen() {
           <Text style={[s.sectionLabel, { color: colors.textPrimary, marginTop: 24 }]}>Quick Actions</Text>
           <View style={s.row}>
             <QuickLink icon="cart-outline" label="Record Sale" onPress={() => router.push('/inventory/new-sale' as any)} colors={colors} />
-            <QuickLink icon="receipt-outline" label="Log Expense" onPress={() => router.push('/inventory/expenses' as any)} colors={colors} />
+            <QuickLink icon="time-outline" label="Sales History" onPress={() => router.push('/inventory/sales' as any)} colors={colors} />
           </View>
           <View style={[s.row, { marginTop: 0 }]}>
+            <QuickLink icon="receipt-outline" label="Log Expense" onPress={() => router.push('/inventory/expenses' as any)} colors={colors} />
             <QuickLink icon="people-outline" label="Customers" onPress={() => router.push('/inventory/customers' as any)} colors={colors} />
+          </View>
+          <View style={[s.row, { marginTop: 0 }]}>
+            <QuickLink icon="podium-outline" label="Best Sellers" onPress={() => router.push('/inventory/best-sellers' as any)} colors={colors} />
+            <QuickLink icon="bar-chart-outline" label="Analytics" onPress={() => router.push('/inventory/analytics' as any)} colors={colors} />
+          </View>
+          <View style={[s.row, { marginTop: 0 }]}>
             <QuickLink icon="business-outline" label="Business Profile" onPress={() => router.push('/inventory/business' as any)} colors={colors} />
+            <View style={{ flex: 1 }} />
           </View>
         </ScrollView>
       )}

@@ -9,7 +9,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Application from 'expo-application';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
 import { FontSize, Radius } from './theme';
 import { Button, Input, Divider, OTPBox, LoadingOverlay, Bouncy, feedback } from './components';
 import Svg, { Path } from 'react-native-svg';
@@ -78,13 +77,10 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
 
-  const redirectUri = makeRedirectUri({ scheme: 'ajo', path: 'oauthredirect' });
-
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
-    redirectUri,
   });
 
   useEffect(() => {
@@ -96,7 +92,7 @@ export const RegisterScreen: React.FC<RegisterProps> = ({ onSuccess, onLogin }) 
         handleGoogleSignIn(idToken);
       } else {
         setLoading(false);
-        setServerError('Google returned no credentials. Add "' + redirectUri + '" to Authorized redirect URIs in Google Cloud Console, then try again.');
+        setServerError('Google sign-in failed — no credentials returned. Please try again.');
       }
     } else if (googleResponse.type === 'error') {
       setLoading(false);
@@ -287,13 +283,10 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  const redirectUri = makeRedirectUri({ scheme: 'ajo', path: 'oauthredirect' });
-
   const [, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
-    redirectUri,
   });
 
   useEffect(() => {
@@ -305,7 +298,7 @@ export const LoginScreen: React.FC<LoginProps> = ({ onSuccess, onRegister, onFor
         handleGoogleSignIn(idToken);
       } else {
         setLoading(false);
-        setServerError('Google returned no credentials. Add "' + redirectUri + '" to Authorized redirect URIs in Google Cloud Console, then try again.');
+        setServerError('Google sign-in failed — no credentials returned. Please try again.');
       }
     } else if (googleResponse.type === 'error') {
       setLoading(false);

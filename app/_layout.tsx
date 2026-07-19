@@ -1,3 +1,4 @@
+import '../src/crashLogger'; // must be first — installs global error handler before any other import runs
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -43,27 +44,6 @@ class ErrorBoundary extends Component<
     return this.props.children;
   }
 }
-
-// Catch JS errors that happen outside React (module init, async, etc.) and
-// persist them so we can surface them as an Alert on the next launch.
-(function installCrashLogger() {
-  const utils = (globalThis as any).ErrorUtils;
-  if (!utils) return;
-  const prev = utils.getGlobalHandler();
-  utils.setGlobalHandler(async (error: Error, isFatal?: boolean) => {
-    try {
-      await SecureStore.setItemAsync(
-        'ajo_crash_log',
-        JSON.stringify({
-          message: (error?.message ?? 'Unknown error').slice(0, 600),
-          stack: (error?.stack ?? '').slice(0, 1200),
-          time: new Date().toISOString(),
-        }),
-      );
-    } catch (_) {}
-    prev?.(error, isFatal);
-  });
-})();
 
 SplashScreen.preventAutoHideAsync();
 

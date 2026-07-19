@@ -1,23 +1,20 @@
 // Must be imported FIRST in _layout.tsx.
-// Installs the global JS error handler before any other module loads,
-// so if any import throws (bad native module init, etc.) the crash is
-// written to SecureStore and shown as an Alert on next launch.
-import * as SecureStore from 'expo-secure-store';
+// Shows a native Alert with the crash message the moment any JS error occurs —
+// no React rendering required, so it works even during module initialization.
+import { Alert } from 'react-native';
 
 const utils = (globalThis as any).ErrorUtils;
 if (utils) {
   const prev = utils.getGlobalHandler();
-  utils.setGlobalHandler(async (error: Error, isFatal?: boolean) => {
+  utils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     try {
-      await SecureStore.setItemAsync(
-        'ajo_crash_log',
-        JSON.stringify({
-          message: (error?.message ?? 'Unknown error').slice(0, 600),
-          stack: (error?.stack ?? '').slice(0, 1200),
-          time: new Date().toISOString(),
-        }),
+      Alert.alert(
+        'App Crash — send this to developer',
+        (error?.message ?? 'Unknown error') + '\n\n' + (error?.stack ?? '').slice(0, 600),
+        [{ text: 'OK', onPress: () => prev?.(error, isFatal) }],
       );
-    } catch (_) {}
-    prev?.(error, isFatal);
+    } catch (_) {
+      prev?.(error, isFatal);
+    }
   });
 }

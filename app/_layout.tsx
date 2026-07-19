@@ -3,7 +3,7 @@ import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, ScrollView, Alert, AppState, type AppStateStatus } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, ScrollView, AppState, type AppStateStatus } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -189,19 +189,6 @@ function AppShell() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
-    // Show any crash from the previous launch (caught by the global handler)
-    SecureStore.getItemAsync('ajo_crash_log').then((raw) => {
-      if (!raw) return;
-      SecureStore.deleteItemAsync('ajo_crash_log').catch(() => {});
-      try {
-        const { message, stack, time } = JSON.parse(raw);
-        Alert.alert(
-          'Previous Crash',
-          `Time: ${time}\n\n${message}\n\n${stack}`,
-          [{ text: 'OK' }],
-        );
-      } catch (_) {}
-    }).catch(() => {});
   }, []);
 
   // On auth hydration check whether a PIN is stored and lock / prompt setup accordingly

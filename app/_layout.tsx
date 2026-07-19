@@ -1,8 +1,8 @@
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, AppState, type AppStateStatus } from 'react-native';
+import { Component, useEffect, useRef } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, ScrollView, Alert, AppState, type AppStateStatus } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,56 @@ import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
 import { FontSize } from '../src/theme';
 import '../global.css';
+
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error;
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: '#000', padding: 20 }}>
+          <Text style={{ color: '#f00', fontSize: 18, fontWeight: 'bold', marginTop: 60 }}>
+            App Crashed
+          </Text>
+          <Text style={{ color: '#fff', fontSize: 14, marginTop: 12 }}>
+            {err.message}
+          </Text>
+          <Text style={{ color: '#aaa', fontSize: 11, marginTop: 16 }}>
+            {err.stack}
+          </Text>
+        </ScrollView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Catch JS errors that happen outside React (module init, async, etc.) and
+// persist them so we can surface them as an Alert on the next launch.
+(function installCrashLogger() {
+  const utils = (globalThis as any).ErrorUtils;
+  if (!utils) return;
+  const prev = utils.getGlobalHandler();
+  utils.setGlobalHandler(async (error: Error, isFatal?: boolean) => {
+    try {
+      await SecureStore.setItemAsync(
+        'ajo_crash_log',
+        JSON.stringify({
+          message: (error?.message ?? 'Unknown error').slice(0, 600),
+          stack: (error?.stack ?? '').slice(0, 1200),
+          time: new Date().toISOString(),
+        }),
+      );
+    } catch (_) {}
+    prev?.(error, isFatal);
+  });
+})();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -159,6 +209,19 @@ function AppShell() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
+    // Show any crash from the previous launch (caught by the global handler)
+    SecureStore.getItemAsync('ajo_crash_log').then((raw) => {
+      if (!raw) return;
+      SecureStore.deleteItemAsync('ajo_crash_log').catch(() => {});
+      try {
+        const { message, stack, time } = JSON.parse(raw);
+        Alert.alert(
+          'Previous Crash',
+          `Time: ${time}\n\n${message}\n\n${stack}`,
+          [{ text: 'OK' }],
+        );
+      } catch (_) {}
+    }).catch(() => {});
   }, []);
 
   // On auth hydration check whether a PIN is stored and lock / prompt setup accordingly
@@ -218,8 +281,10 @@ function AppShell() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppShell />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AppShell />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

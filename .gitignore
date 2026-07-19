@@ -34,6 +34,10 @@ yarn-error.*
 .env
 .env*.local
 
+# Firebase / Google - keep out of git, provided via EAS env at build time
+google-services.json
+GoogleService-Info.plist
+
 # typescript
 *.tsbuildinfo
 

@@ -13,7 +13,7 @@ import { useAuthStore } from '../src/store/useAppStore';
 import { usePinStore } from '../src/store/usePinStore';
 import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
-import { syncPushToken } from '../src/services/pushService';
+import { syncPushToken, setupNotificationHandler } from '../src/services/pushService';
 import * as Notifications from 'expo-notifications';
 import { FontSize } from '../src/theme';
 import '../global.css';
@@ -192,6 +192,7 @@ function AppShell() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
+    setupNotificationHandler();
   }, []);
 
   // Register push token once fully onboarded

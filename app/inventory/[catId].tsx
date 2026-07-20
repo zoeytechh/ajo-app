@@ -23,6 +23,8 @@ export default function CategoryDetailScreen() {
 
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName]   = useState('');
+  const [search, setSearch]       = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low' | 'out'>('all');
 
   const { data: categories, isRefetching, refetch } = useQuery({
     queryKey: ['inventory-categories'],
@@ -75,6 +77,16 @@ export default function CategoryDetailScreen() {
     (sum, p) => sum + parseFloat(p.price) * p.quantity,
     0,
   );
+
+  const filteredProducts = (products ?? []).filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchesStock =
+      stockFilter === 'all' ? true :
+      stockFilter === 'out' ? p.quantity === 0 :
+      stockFilter === 'low' ? p.quantity > 0 && p.quantity < 5 :
+      p.quantity >= 5;
+    return matchesSearch && matchesStock;
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -151,6 +163,44 @@ export default function CategoryDetailScreen() {
         </View>
       )}
 
+      {/* Search + filter row */}
+      {!isLoading && (products ?? []).length > 0 && (
+        <View style={[s.searchRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <View style={[s.searchBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <Ionicons name="search-outline" size={16} color={colors.textTertiary} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search products…"
+              placeholderTextColor={colors.textTertiary}
+              style={{ flex: 1, marginLeft: 8, fontSize: FontSize.sm, color: colors.textPrimary }}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={s.filterChips}>
+            {(['all', 'in', 'low', 'out'] as const).map(f => {
+              const label = f === 'all' ? 'All' : f === 'in' ? 'In stock' : f === 'low' ? 'Low stock' : 'Out of stock';
+              const active = stockFilter === f;
+              return (
+                <TouchableOpacity
+                  key={f}
+                  onPress={() => setStockFilter(f)}
+                  style={[s.chip, { backgroundColor: active ? '#E65100' : colors.background, borderColor: active ? '#E65100' : colors.border }]}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: active ? '#fff' : colors.textSecondary }}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={[s.body, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
@@ -170,8 +220,18 @@ export default function CategoryDetailScreen() {
               Tap the + button to add your first product in this category.
             </Text>
           </View>
+        ) : filteredProducts.length === 0 ? (
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+            <Ionicons name="search-outline" size={44} color={colors.border} />
+            <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginTop: 16 }}>
+              No products match
+            </Text>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 6, textAlign: 'center' }}>
+              Try a different name or filter.
+            </Text>
+          </View>
         ) : (
-          (products ?? []).map((p) => (
+          filteredProducts.map((p) => (
             <TouchableOpacity
               key={p.id}
               onPress={() => router.push(`/inventory/${catId}/${p.id}` as any)}
@@ -254,6 +314,17 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#E65100', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+  },
+  searchRow: { paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: Radius.md,
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+  filterChips: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
+  chip: {
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 20, borderWidth: 1,
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   modalSheet: {

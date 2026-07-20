@@ -127,9 +127,46 @@ export interface CollectorReport {
   reviewed_at: string | null;
 }
 
+export interface QueueMember {
+  id: number;
+  user: AjoUser;
+  group_id: number;
+  group_name: string;
+  personal_amount: string;
+  status: ThriftMemberStatus;
+  flag_reason: string;
+  created_at: string;
+}
+
+export interface QueuePayment {
+  id: number;
+  member_id: number;
+  member_name: string;
+  group_id: number;
+  group_name: string;
+  amount: string;
+  period_date: string;
+  notes: string;
+  marked_at: string;
+  dispute_reason: string;
+  dispute_audio: string | null;
+  disputed_at: string | null;
+}
+
+export interface CollectorQueue {
+  pending_members: QueueMember[];
+  disputed_payments: QueuePayment[];
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const thriftService = {
+  // ── Collector queue ──────────────────────────────────────────────────────────
+  getCollectorQueue: async (): Promise<CollectorQueue> => {
+    const { data } = await api.get('/api/thrift/collector-queue/');
+    return data;
+  },
+
   // ── Groups ──────────────────────────────────────────────────────────────────
   getGroups: async (): Promise<ThriftGroup[]> => {
     const { data } = await api.get('/api/thrift/');

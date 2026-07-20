@@ -177,6 +177,13 @@ export default function HomeRoute() {
     queryFn: thriftService.getOrgs,
   });
 
+  const { data: collectorQueue } = useQuery({
+    queryKey: ['thrift-collector-queue'],
+    queryFn:  thriftService.getCollectorQueue,
+    enabled:  !!user,
+  });
+  const queueCount = (collectorQueue?.pending_members.length ?? 0) + (collectorQueue?.disputed_payments.length ?? 0);
+
   const { data: categories, isLoading: invLoading, isError: invError, refetch: refetchInv, isRefetching: invRefetching } = useQuery({
     queryKey: ['inventory-categories'],
     queryFn: getCategories,
@@ -378,6 +385,28 @@ export default function HomeRoute() {
         ) : tab === 'thrift' ? (
           /* ── Thrift content ── */
           <>
+            {/* Approval queue banner — shown when collector has pending items */}
+            {myThriftGroups.length > 0 && queueCount > 0 && (
+              <TouchableOpacity
+                onPress={() => router.push('/thrift/queue' as any)}
+                style={[s.billsBanner, { backgroundColor: colors.errorLight, borderColor: colors.error, marginBottom: 10 }]}
+                activeOpacity={0.82}
+              >
+                <View style={[s.billsIcon, { backgroundColor: '#fee2e2' }]}>
+                  <Ionicons name="time-outline" size={20} color={colors.error} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.error }}>
+                    {queueCount} item{queueCount !== 1 ? 's' : ''} need your attention
+                  </Text>
+                  <Text style={{ fontSize: FontSize.xs, color: colors.error, marginTop: 1, opacity: 0.8 }}>
+                    Pending approvals or disputed payments
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.error} />
+              </TouchableOpacity>
+            )}
+
             {/* Bills banner — shown to collectors only */}
             {myThriftGroups.length > 0 && (
               <TouchableOpacity

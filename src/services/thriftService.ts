@@ -158,12 +158,41 @@ export interface CollectorQueue {
   disputed_payments: QueuePayment[];
 }
 
+export interface ThriftHistoryPayment {
+  id: number;
+  member_id: number;
+  member_name: string;
+  group_id: number;
+  group_name: string;
+  amount: string;
+  period_date: string;
+  notes: string;
+  marked_at: string;
+  status: ThriftPaymentStatus;
+  payer_confirmed: boolean;
+  dispute_reason: string;
+  dispute_audio: string | null;
+  disputed_at: string | null;
+  resolved_at: string | null;
+}
+
+export interface ThriftPaymentHistory {
+  collector_payments: ThriftHistoryPayment[];
+  payer_payments: ThriftHistoryPayment[];
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const thriftService = {
   // ── Collector queue ──────────────────────────────────────────────────────────
   getCollectorQueue: async (): Promise<CollectorQueue> => {
     const { data } = await api.get('/api/thrift/collector-queue/');
+    return data;
+  },
+
+  // ── Cross-group payment history ──────────────────────────────────────────────
+  getMyPaymentHistory: async (): Promise<ThriftPaymentHistory> => {
+    const { data } = await api.get('/api/thrift/my-payment-history/');
     return data;
   },
 

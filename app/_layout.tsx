@@ -13,8 +13,6 @@ import { useAuthStore } from '../src/store/useAppStore';
 import { usePinStore } from '../src/store/usePinStore';
 import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
-import { syncPushToken, setupNotificationHandler } from '../src/services/pushService';
-import * as Notifications from 'expo-notifications';
 import { FontSize } from '../src/theme';
 import '../global.css';
 
@@ -192,20 +190,27 @@ function AppShell() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
-    setupNotificationHandler();
+    // Load push service lazily — if expo-notifications isn't available this fails silently
+    import('../src/services/pushService').then(({ setupNotificationHandler }) => {
+      setupNotificationHandler();
+    }).catch(() => {});
   }, []);
 
   // Register push token once fully onboarded
   useEffect(() => {
-    if (isFullyOnboarded) syncPushToken();
+    if (!isFullyOnboarded) return;
+    import('../src/services/pushService').then(({ syncPushToken }) => {
+      syncPushToken();
+    }).catch(() => {});
   }, [isFullyOnboarded]);
 
   // Navigate to notifications screen when user taps a push notification
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener(() => {
-      router.push('/notifications' as any);
-    });
-    return () => sub.remove();
+    let cleanup: (() => void) | undefined;
+    import('../src/services/pushService').then(({ addTapListener }) => {
+      cleanup = addTapListener(() => router.push('/notifications' as any));
+    }).catch(() => {});
+    return () => cleanup?.();
   }, []);
 
   // On auth hydration check whether a PIN is stored and lock / prompt setup accordingly

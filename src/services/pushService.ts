@@ -50,3 +50,8 @@ export async function syncPushToken(): Promise<void> {
     // Non-fatal — app works without push
   }
 }
+
+export function addTapListener(onTap: () => void): () => void {
+  const sub = Notifications.addNotificationResponseReceivedListener(onTap);
+  return () => sub.remove();
+}

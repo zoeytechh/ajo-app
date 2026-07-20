@@ -13,6 +13,8 @@ import { useAuthStore } from '../src/store/useAppStore';
 import { usePinStore } from '../src/store/usePinStore';
 import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
+import { syncPushToken } from '../src/services/pushService';
+import * as Notifications from 'expo-notifications';
 import { FontSize } from '../src/theme';
 import '../global.css';
 
@@ -183,12 +185,26 @@ function AppShell() {
   const { isLocked, isSettingUp, hasPinSet, setHasPinSet, beginSetup, lock } = usePinStore();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const sessionCheckedRef = useRef(false);
+  const router = useRouter();
   const isAuth = !!user && !!accessToken;
   // Only enforce PIN once the user is fully onboarded (has a phone number)
   const isFullyOnboarded = isAuth && !!user?.phone_number;
 
   useEffect(() => {
     SplashScreen.hideAsync();
+  }, []);
+
+  // Register push token once fully onboarded
+  useEffect(() => {
+    if (isFullyOnboarded) syncPushToken();
+  }, [isFullyOnboarded]);
+
+  // Navigate to notifications screen when user taps a push notification
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(() => {
+      router.push('/notifications' as any);
+    });
+    return () => sub.remove();
   }, []);
 
   // On auth hydration check whether a PIN is stored and lock / prompt setup accordingly

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   RefreshControl, StyleSheet, Alert, ActivityIndicator,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,8 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import {
-  getCategories, getProducts, deleteCategory,
-  type InventoryCategory, type InventoryProduct,
+  getCategories, getProducts, deleteCategory, updateCategory,
 } from '../../src/services/inventoryService';
 import { getCategoryEmoji, formatStock, stockColor } from '../../src/utils/inventoryHelpers';
 
@@ -20,6 +20,9 @@ export default function CategoryDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const qc = useQueryClient();
+
+  const [editModal, setEditModal] = useState(false);
+  const [editName, setEditName]   = useState('');
 
   const { data: categories, isRefetching, refetch } = useQuery({
     queryKey: ['inventory-categories'],
@@ -42,6 +45,20 @@ export default function CategoryDetailScreen() {
     },
     onError: () => Alert.alert('Error', 'Could not delete category.'),
   });
+
+  const { mutate: saveCatEdit, isPending: savingCat } = useMutation({
+    mutationFn: () => updateCategory(catIdNum, { name: editName.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-categories'] });
+      setEditModal(false);
+    },
+    onError: () => Alert.alert('Error', 'Could not update category.'),
+  });
+
+  const openEdit = () => {
+    setEditName(cat?.name ?? '');
+    setEditModal(true);
+  };
 
   const confirmDelete = () => {
     Alert.alert(
@@ -71,6 +88,13 @@ export default function CategoryDetailScreen() {
           {cat?.name ?? 'Category'}
         </Text>
         <TouchableOpacity
+          onPress={openEdit}
+          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
+          style={{ marginRight: 14 }}
+        >
+          <Ionicons name="pencil-outline" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity
           onPress={confirmDelete}
           disabled={deleting}
           hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
@@ -82,6 +106,35 @@ export default function CategoryDetailScreen() {
           }
         </TouchableOpacity>
       </View>
+
+      {/* Edit category modal */}
+      <Modal visible={editModal} transparent animationType="slide" onRequestClose={() => setEditModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setEditModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Rename Category</Text>
+            <Text style={[s.modalLabel, { color: colors.textSecondary }]}>Category name</Text>
+            <TextInput
+              value={editName}
+              onChangeText={setEditName}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="e.g. Beverages"
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+            />
+            <TouchableOpacity
+              onPress={() => saveCatEdit()}
+              disabled={savingCat || !editName.trim()}
+              style={[s.modalSaveBtn, { backgroundColor: '#E65100', opacity: (savingCat || !editName.trim()) ? 0.5 : 1 }]}
+            >
+              {savingCat
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Save</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Summary bar */}
       {!isLoading && (products ?? []).length > 0 && (
@@ -201,5 +254,19 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#E65100', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  modalSheet: {
+    paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+  },
+  modalTitle: { fontSize: FontSize.lg, fontWeight: '800', marginBottom: 20 },
+  modalLabel: { fontSize: FontSize.xs, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  modalInput: {
+    borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: FontSize.md,
+  },
+  modalSaveBtn: {
+    marginTop: 24, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center',
   },
 });

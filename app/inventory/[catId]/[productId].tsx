@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Image,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
 import {
-  getProducts, getMovements, deleteProduct,
+  getProducts, getMovements, deleteProduct, updateProduct,
   type InventoryMovement,
 } from '../../../src/services/inventoryService';
 import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
@@ -27,6 +28,10 @@ export default function ProductDetailScreen() {
   const { colors } = useTheme();
   const router     = useRouter();
   const qc         = useQueryClient();
+
+  const [editModal, setEditModal] = useState(false);
+  const [editName, setEditName]   = useState('');
+  const [editPrice, setEditPrice] = useState('');
 
   const { data: products } = useQuery({
     queryKey: ['inventory-products', catIdNum],
@@ -50,6 +55,24 @@ export default function ProductDetailScreen() {
     },
     onError: () => Alert.alert('Error', 'Could not delete this product.'),
   });
+
+  const { mutate: saveEdit, isPending: saving } = useMutation({
+    mutationFn: () => updateProduct(prodIdNum, {
+      name: editName.trim(),
+      price: editPrice.trim(),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
+      setEditModal(false);
+    },
+    onError: () => Alert.alert('Error', 'Could not update product.'),
+  });
+
+  const openEdit = () => {
+    setEditName(product?.name ?? '');
+    setEditPrice(product?.price ?? '');
+    setEditModal(true);
+  };
 
   const confirmDelete = () => {
     Alert.alert(
@@ -80,6 +103,9 @@ export default function ProductDetailScreen() {
         <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 16, flex: 1 }} numberOfLines={1}>
           {product?.name ?? 'Product'}
         </Text>
+        <TouchableOpacity onPress={openEdit} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }} style={{ marginRight: 14 }}>
+          <Ionicons name="pencil-outline" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={confirmDelete} disabled={deleting} hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}>
           {deleting
             ? <ActivityIndicator size="small" color={colors.error} />
@@ -87,6 +113,44 @@ export default function ProductDetailScreen() {
           }
         </TouchableOpacity>
       </View>
+
+      {/* Edit modal */}
+      <Modal visible={editModal} transparent animationType="slide" onRequestClose={() => setEditModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setEditModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Edit Product</Text>
+            <Text style={[s.modalLabel, { color: colors.textSecondary }]}>Product name</Text>
+            <TextInput
+              value={editName}
+              onChangeText={setEditName}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="e.g. Indomie (70g)"
+              placeholderTextColor={colors.textTertiary}
+              autoFocus
+            />
+            <Text style={[s.modalLabel, { color: colors.textSecondary, marginTop: 14 }]}>Selling price (₦)</Text>
+            <TextInput
+              value={editPrice}
+              onChangeText={setEditPrice}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="e.g. 150"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="decimal-pad"
+            />
+            <TouchableOpacity
+              onPress={() => saveEdit()}
+              disabled={saving || !editName.trim() || !editPrice.trim()}
+              style={[s.modalSaveBtn, { backgroundColor: '#E65100', opacity: (saving || !editName.trim() || !editPrice.trim()) ? 0.5 : 1 }]}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Save changes</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <ScrollView contentContainerStyle={[s.body, { paddingBottom: 60 }]} showsVerticalScrollIndicator={false}>
         {/* Stock info card */}
@@ -244,4 +308,18 @@ const s = StyleSheet.create({
   actionSub: { fontSize: FontSize.xs, textAlign: 'center' },
   moveRow: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: Radius.lg, marginBottom: 10 },
   moveIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  modalSheet: {
+    paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+  },
+  modalTitle: { fontSize: FontSize.lg, fontWeight: '800', marginBottom: 20 },
+  modalLabel: { fontSize: FontSize.xs, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  modalInput: {
+    borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: FontSize.md,
+  },
+  modalSaveBtn: {
+    marginTop: 24, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center',
+  },
 });

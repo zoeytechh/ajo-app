@@ -14,7 +14,12 @@ import { usePinStore } from '../src/store/usePinStore';
 import { AppLockScreen } from '../src/AppLockScreen';
 import { notificationService } from '../src/services/notificationService';
 import { FontSize } from '../src/theme';
+import Constants from 'expo-constants';
 import '../global.css';
+
+// expo-notifications was removed from Expo Go in SDK 53 — importing it throws.
+// Never load pushService when running inside Expo Go.
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
 class ErrorBoundary extends Component<
   { children: React.ReactNode },
@@ -190,7 +195,7 @@ function AppShell() {
 
   useEffect(() => {
     SplashScreen.hideAsync();
-    // Load push service lazily — if expo-notifications isn't available this fails silently
+    if (IS_EXPO_GO) return;
     import('../src/services/pushService').then(({ setupNotificationHandler }) => {
       setupNotificationHandler();
     }).catch(() => {});
@@ -198,7 +203,7 @@ function AppShell() {
 
   // Register push token once fully onboarded
   useEffect(() => {
-    if (!isFullyOnboarded) return;
+    if (IS_EXPO_GO || !isFullyOnboarded) return;
     import('../src/services/pushService').then(({ syncPushToken }) => {
       syncPushToken();
     }).catch(() => {});
@@ -206,6 +211,7 @@ function AppShell() {
 
   // Navigate to notifications screen when user taps a push notification
   useEffect(() => {
+    if (IS_EXPO_GO) return;
     let cleanup: (() => void) | undefined;
     import('../src/services/pushService').then(({ addTapListener }) => {
       cleanup = addTapListener(() => router.push('/notifications' as any));

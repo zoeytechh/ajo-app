@@ -270,9 +270,13 @@ export interface ProductDailySummary {
   units_sold: number;
   units_received: number;
   revenue: string;
+  is_closed: boolean;
 }
 
 export const getProductDailySummary = (prodId: number, date?: string): Promise<ProductDailySummary> => {
   const params = date ? `?date=${date}` : '';
   return api.get(`/api/inventory/products/${prodId}/daily-summary/${params}`).then(r => r.data);
 };
+
+export const closeStock = (prodId: number): Promise<{ closing_stock: number; message: string }> =>
+  api.post(`/api/inventory/products/${prodId}/close-stock/`).then(r => r.data);

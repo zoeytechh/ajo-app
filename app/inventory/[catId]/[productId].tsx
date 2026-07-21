@@ -11,7 +11,7 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
 import {
   getProducts, getMovements, deleteProduct, updateProduct,
-  getProductDailySummary,
+  getProductDailySummary, closeStock,
   type InventoryMovement,
 } from '../../../src/services/inventoryService';
 import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
@@ -86,6 +86,15 @@ export default function ProductDetailScreen() {
       setEditModal(false);
     },
     onError: () => Alert.alert('Error', 'Could not update product.'),
+  });
+
+  const { mutate: doCloseStock, isPending: closingStock } = useMutation({
+    mutationFn: () => closeStock(prodIdNum),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['inventory-daily-summary', prodIdNum] });
+      Alert.alert('Stock closed', `Closing stock: ${data.closing_stock} units. Tomorrow's opening stock is set.`);
+    },
+    onError: () => Alert.alert('Error', 'Could not close stock.'),
   });
 
   const openEdit = () => {
@@ -242,30 +251,72 @@ export default function ProductDetailScreen() {
           {summaryLoading ? (
             <ActivityIndicator size="small" color="#E65100" style={{ marginVertical: 16 }} />
           ) : (
-            <View style={s.summaryGrid}>
-              <View style={[s.summaryCell, { borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }]}>
-                <Text style={s.summaryCellLabel}>Opening Stock</Text>
-                <Text style={[s.summaryCellValue, { color: '#1565C0' }]}>{summary?.opening_stock ?? 0}</Text>
-                <Text style={s.summaryCellSub}>units at start</Text>
+            <>
+              <View style={s.summaryGrid}>
+                <View style={[s.summaryCell, { borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }]}>
+                  <Text style={s.summaryCellLabel}>Opening Stock</Text>
+                  <Text style={[s.summaryCellValue, { color: '#1565C0' }]}>{summary?.opening_stock ?? 0}</Text>
+                  <Text style={s.summaryCellSub}>units at start</Text>
+                </View>
+                <View style={[s.summaryCell, { borderBottomWidth: 1, borderColor: colors.border }]}>
+                  <Text style={s.summaryCellLabel}>Closing Stock</Text>
+                  <Text style={[s.summaryCellValue, { color: summary?.is_closed ? '#E65100' : colors.textSecondary }]}>
+                    {summary?.closing_stock ?? 0}
+                  </Text>
+                  <Text style={s.summaryCellSub}>{summary?.is_closed ? 'confirmed' : 'live count'}</Text>
+                </View>
+                <View style={[s.summaryCell, { borderRightWidth: 1, borderColor: colors.border }]}>
+                  <Text style={s.summaryCellLabel}>Sold Today</Text>
+                  <Text style={[s.summaryCellValue, { color: '#C62828' }]}>{summary?.units_sold ?? 0}</Text>
+                  <Text style={s.summaryCellSub}>units out</Text>
+                </View>
+                <View style={s.summaryCell}>
+                  <Text style={s.summaryCellLabel}>Revenue</Text>
+                  <Text style={[s.summaryCellValue, { color: '#2E7D32', fontSize: FontSize.md }]}>
+                    ₦{parseFloat(summary?.revenue ?? '0').toLocaleString()}
+                  </Text>
+                  <Text style={s.summaryCellSub}>from sales</Text>
+                </View>
               </View>
-              <View style={[s.summaryCell, { borderBottomWidth: 1, borderColor: colors.border }]}>
-                <Text style={s.summaryCellLabel}>Closing Stock</Text>
-                <Text style={[s.summaryCellValue, { color: '#E65100' }]}>{summary?.closing_stock ?? 0}</Text>
-                <Text style={s.summaryCellSub}>units at end</Text>
-              </View>
-              <View style={[s.summaryCell, { borderRightWidth: 1, borderColor: colors.border }]}>
-                <Text style={s.summaryCellLabel}>Sold Today</Text>
-                <Text style={[s.summaryCellValue, { color: '#C62828' }]}>{summary?.units_sold ?? 0}</Text>
-                <Text style={s.summaryCellSub}>units out</Text>
-              </View>
-              <View style={s.summaryCell}>
-                <Text style={s.summaryCellLabel}>Revenue</Text>
-                <Text style={[s.summaryCellValue, { color: '#2E7D32', fontSize: FontSize.md }]}>
-                  ₦{parseFloat(summary?.revenue ?? '0').toLocaleString()}
-                </Text>
-                <Text style={s.summaryCellSub}>from sales</Text>
-              </View>
-            </View>
+
+              {/* Close stock button — only for today, only if not already closed */}
+              {isToday && (
+                <View style={[s.closeStockRow, { borderTopColor: colors.border }]}>
+                  {summary?.is_closed ? (
+                    <View style={s.closedBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
+                      <Text style={{ fontSize: FontSize.xs, color: '#2E7D32', fontWeight: '700', marginLeft: 6 }}>
+                        Stock closed for today
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => Alert.alert(
+                        'Close stock for today?',
+                        `This will record ${product?.quantity ?? 0} units as today's closing stock and set it as tomorrow's opening stock.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Close Stock', onPress: () => doCloseStock() },
+                        ]
+                      )}
+                      disabled={closingStock}
+                      style={[s.closeStockBtn, { backgroundColor: '#1565C0' }]}
+                      activeOpacity={0.85}
+                    >
+                      {closingStock
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <>
+                            <Ionicons name="lock-closed-outline" size={16} color="#fff" />
+                            <Text style={{ fontSize: FontSize.sm, color: '#fff', fontWeight: '700', marginLeft: 8 }}>
+                              Close today's stock
+                            </Text>
+                          </>
+                      }
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -410,5 +461,15 @@ const s = StyleSheet.create({
   },
   summaryCellSub: {
     fontSize: 10, color: '#999', marginTop: 2,
+  },
+  closeStockRow: {
+    borderTopWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
+  },
+  closeStockBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    borderRadius: Radius.md, paddingVertical: 12,
+  },
+  closedBadge: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 6,
   },
 });

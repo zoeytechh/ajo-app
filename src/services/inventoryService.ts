@@ -280,3 +280,6 @@ export const getProductDailySummary = (prodId: number, date?: string): Promise<P
 
 export const closeStock = (prodId: number): Promise<{ closing_stock: number; message: string }> =>
   api.post(`/api/inventory/products/${prodId}/close-stock/`).then(r => r.data);
+
+export const setOpeningStock = (prodId: number, opening_stock: number): Promise<{ date: string; opening_stock: number }> =>
+  api.post(`/api/inventory/products/${prodId}/set-opening-stock/`, { opening_stock }).then(r => r.data);

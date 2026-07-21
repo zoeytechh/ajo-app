@@ -11,7 +11,7 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
 import {
   getProducts, getMovements, deleteProduct, updateProduct,
-  getProductDailySummary, closeStock,
+  getProductDailySummary, closeStock, setOpeningStock,
   type InventoryMovement,
 } from '../../../src/services/inventoryService';
 import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
@@ -30,10 +30,12 @@ export default function ProductDetailScreen() {
   const router     = useRouter();
   const qc         = useQueryClient();
 
-  const [editModal, setEditModal] = useState(false);
-  const [editName, setEditName]   = useState('');
-  const [editPrice, setEditPrice] = useState('');
-  const [summaryDate, setSummaryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [editModal, setEditModal]       = useState(false);
+  const [editName, setEditName]         = useState('');
+  const [editPrice, setEditPrice]       = useState('');
+  const [summaryDate, setSummaryDate]   = useState(new Date().toISOString().slice(0, 10));
+  const [openingModal, setOpeningModal] = useState(false);
+  const [openingInput, setOpeningInput] = useState('');
 
   const { data: products } = useQuery({
     queryKey: ['inventory-products', catIdNum],
@@ -95,6 +97,15 @@ export default function ProductDetailScreen() {
       Alert.alert('Stock closed', `Closing stock: ${data.closing_stock} units. Tomorrow's opening stock is set.`);
     },
     onError: () => Alert.alert('Error', 'Could not close stock.'),
+  });
+
+  const { mutate: doSetOpening, isPending: settingOpening } = useMutation({
+    mutationFn: () => setOpeningStock(prodIdNum, parseInt(openingInput, 10)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-daily-summary', prodIdNum] });
+      setOpeningModal(false);
+    },
+    onError: () => Alert.alert('Error', 'Could not update opening stock.'),
   });
 
   const openEdit = () => {
@@ -181,6 +192,39 @@ export default function ProductDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Opening stock override modal */}
+      <Modal visible={openingModal} transparent animationType="slide" onRequestClose={() => setOpeningModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setOpeningModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Set Opening Stock</Text>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 16 }}>
+              Enter how many units you had at the start of today — e.g. after buying new stock this morning.
+            </Text>
+            <Text style={[s.modalLabel, { color: colors.textSecondary }]}>Units at day start</Text>
+            <TextInput
+              value={openingInput}
+              onChangeText={setOpeningInput}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="e.g. 30"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
+              autoFocus
+            />
+            <TouchableOpacity
+              onPress={() => doSetOpening()}
+              disabled={settingOpening || !openingInput.trim()}
+              style={[s.modalSaveBtn, { backgroundColor: '#1565C0', opacity: (settingOpening || !openingInput.trim()) ? 0.5 : 1 }]}
+            >
+              {settingOpening
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Save opening stock</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <ScrollView contentContainerStyle={[s.body, { paddingBottom: 60 }]} showsVerticalScrollIndicator={false}>
         {/* Stock info card */}
         {product && (
@@ -254,7 +298,17 @@ export default function ProductDetailScreen() {
             <>
               <View style={s.summaryGrid}>
                 <View style={[s.summaryCell, { borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }]}>
-                  <Text style={s.summaryCellLabel}>Opening Stock</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={s.summaryCellLabel}>Opening Stock</Text>
+                    {isToday && !summary?.is_closed && (
+                      <TouchableOpacity
+                        onPress={() => { setOpeningInput(String(summary?.opening_stock ?? 0)); setOpeningModal(true); }}
+                        hitSlop={{ top: 6, left: 6, bottom: 6, right: 6 }}
+                      >
+                        <Ionicons name="pencil" size={11} color="#888" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={[s.summaryCellValue, { color: '#1565C0' }]}>{summary?.opening_stock ?? 0}</Text>
                   <Text style={s.summaryCellSub}>units at start</Text>
                 </View>

@@ -71,6 +71,15 @@ export default function CategoryDetailScreen() {
     setEditModal(true);
   };
 
+  const openMenu = () => {
+    Alert.alert(cat?.name ?? 'Category', undefined, [
+      { text: 'Rename', onPress: openEdit },
+      { text: 'Custom Fields', onPress: openFields },
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   const { mutate: saveFields, isPending: savingFields } = useMutation({
     mutationFn: () => updateCategory(catIdNum, { custom_field_defs: draftFields }),
     onSuccess: () => {
@@ -144,28 +153,14 @@ export default function CategoryDetailScreen() {
           {cat?.name ?? 'Category'}
         </Text>
         <TouchableOpacity
-          onPress={openFields}
-          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
-          style={{ marginRight: 14 }}
-        >
-          <Ionicons name="list-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={openEdit}
-          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
-          style={{ marginRight: 14 }}
-        >
-          <Ionicons name="pencil-outline" size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={confirmDelete}
+          onPress={openMenu}
           disabled={deleting}
           hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
-          style={{ marginRight: 8 }}
+          style={{ paddingHorizontal: 4 }}
         >
           {deleting
-            ? <ActivityIndicator size="small" color={colors.error} />
-            : <Ionicons name="trash-outline" size={22} color={colors.error} />
+            ? <ActivityIndicator size="small" color={colors.textSecondary} />
+            : <Ionicons name="ellipsis-vertical" size={22} color={colors.textSecondary} />
           }
         </TouchableOpacity>
       </View>

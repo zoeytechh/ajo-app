@@ -45,24 +45,26 @@ export default function ProductDetailScreen() {
     }, [catIdNum, prodIdNum]),
   );
 
-  const { data: products } = useQuery({
+  const { data: products, isFetching: productsFetching } = useQuery({
     queryKey: ['inventory-products', catIdNum],
     queryFn: () => getProducts(catIdNum),
     enabled: !!catIdNum,
   });
   const product = products?.find(p => p.id === prodIdNum);
 
-  const { data: movements, isLoading: movLoading } = useQuery({
+  const { data: movements, isLoading: movLoading, isFetching: movFetching } = useQuery({
     queryKey: ['inventory-movements', prodIdNum],
     queryFn: () => getMovements(prodIdNum),
     enabled: !!prodIdNum,
   });
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isFetching: summaryFetching } = useQuery({
     queryKey: ['inventory-daily-summary', prodIdNum, summaryDate],
     queryFn: () => getProductDailySummary(prodIdNum, summaryDate),
     enabled: !!prodIdNum,
   });
+
+  const isRefreshing = (productsFetching || summaryFetching || movFetching) && !!products;
 
   const isToday = summaryDate === new Date().toISOString().slice(0, 10);
   const shiftDate = (n: number) => {
@@ -262,9 +264,12 @@ export default function ProductDetailScreen() {
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontWeight: '600' }}>STOCK</Text>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: stockColor(product.quantity), marginTop: 4 }}>
-                  {product.quantity}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  {productsFetching && !!products && <ActivityIndicator size="small" color={stockColor(product.quantity)} />}
+                  <Text style={{ fontSize: 28, fontWeight: '900', color: stockColor(product.quantity), opacity: productsFetching ? 0.45 : 1 }}>
+                    {product.quantity}
+                  </Text>
+                </View>
               </View>
             </View>
             <View style={[s.statusBar, { backgroundColor: '#FFCCBC' }]}>
@@ -290,9 +295,12 @@ export default function ProductDetailScreen() {
             <TouchableOpacity onPress={() => shiftDate(-1)} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
               <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
-              {isToday ? 'Today' : formatSummaryDate}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {isRefreshing && <ActivityIndicator size="small" color="#E65100" />}
+              <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                {isToday ? 'Today' : formatSummaryDate}
+              </Text>
+            </View>
             <TouchableOpacity onPress={() => shiftDate(1)} disabled={isToday}
               hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}
               style={{ opacity: isToday ? 0.3 : 1 }}>
@@ -304,7 +312,7 @@ export default function ProductDetailScreen() {
             <ActivityIndicator size="small" color="#E65100" style={{ marginVertical: 16 }} />
           ) : (
             <>
-              <View style={s.summaryGrid}>
+              <View style={[s.summaryGrid, { opacity: isRefreshing ? 0.45 : 1 }]}>
                 <View style={[s.summaryCell, { borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={s.summaryCellLabel}>Opening Stock</Text>

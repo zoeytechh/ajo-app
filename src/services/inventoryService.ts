@@ -260,3 +260,19 @@ export interface AnalyticsPoint {
 
 export const getAnalytics = (period: AnalyticsPeriod = 'daily', days = 30): Promise<AnalyticsPoint[]> =>
   api.get(`/api/inventory/analytics/?period=${period}&days=${days}`).then(r => r.data);
+
+// ─── Product Daily Summary ────────────────────────────────────────────────────
+
+export interface ProductDailySummary {
+  date: string;
+  opening_stock: number;
+  closing_stock: number;
+  units_sold: number;
+  units_received: number;
+  revenue: string;
+}
+
+export const getProductDailySummary = (prodId: number, date?: string): Promise<ProductDailySummary> => {
+  const params = date ? `?date=${date}` : '';
+  return api.get(`/api/inventory/products/${prodId}/daily-summary/${params}`).then(r => r.data);
+};

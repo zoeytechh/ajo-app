@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Image,
@@ -11,6 +11,7 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../../src/theme';
 import {
   getProducts, getMovements, deleteProduct, updateProduct,
+  getProductDailySummary,
   type InventoryMovement,
 } from '../../../src/services/inventoryService';
 import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
@@ -32,6 +33,7 @@ export default function ProductDetailScreen() {
   const [editModal, setEditModal] = useState(false);
   const [editName, setEditName]   = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [summaryDate, setSummaryDate] = useState(new Date().toISOString().slice(0, 10));
 
   const { data: products } = useQuery({
     queryKey: ['inventory-products', catIdNum],
@@ -45,6 +47,24 @@ export default function ProductDetailScreen() {
     queryFn: () => getMovements(prodIdNum),
     enabled: !!prodIdNum,
   });
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['inventory-daily-summary', prodIdNum, summaryDate],
+    queryFn: () => getProductDailySummary(prodIdNum, summaryDate),
+    enabled: !!prodIdNum,
+  });
+
+  const isToday = summaryDate === new Date().toISOString().slice(0, 10);
+  const shiftDate = (n: number) => {
+    const d = new Date(summaryDate);
+    d.setDate(d.getDate() + n);
+    const next = d.toISOString().slice(0, 10);
+    if (next <= new Date().toISOString().slice(0, 10)) setSummaryDate(next);
+  };
+  const formatSummaryDate = useMemo(() => {
+    const dt = new Date(summaryDate + 'T00:00:00');
+    return dt.toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric', month: 'short' });
+  }, [summaryDate]);
 
   const { mutate: delProduct, isPending: deleting } = useMutation({
     mutationFn: () => deleteProduct(prodIdNum),
@@ -202,6 +222,53 @@ export default function ProductDetailScreen() {
           </View>
         )}
 
+        {/* Daily stock summary */}
+        <View style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Date navigator */}
+          <View style={s.summaryNav}>
+            <TouchableOpacity onPress={() => shiftDate(-1)} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+              {isToday ? 'Today' : formatSummaryDate}
+            </Text>
+            <TouchableOpacity onPress={() => shiftDate(1)} disabled={isToday}
+              hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}
+              style={{ opacity: isToday ? 0.3 : 1 }}>
+              <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          {summaryLoading ? (
+            <ActivityIndicator size="small" color="#E65100" style={{ marginVertical: 16 }} />
+          ) : (
+            <View style={s.summaryGrid}>
+              <View style={[s.summaryCell, { borderRightWidth: 1, borderBottomWidth: 1, borderColor: colors.border }]}>
+                <Text style={s.summaryCellLabel}>Opening Stock</Text>
+                <Text style={[s.summaryCellValue, { color: '#1565C0' }]}>{summary?.opening_stock ?? 0}</Text>
+                <Text style={s.summaryCellSub}>units at start</Text>
+              </View>
+              <View style={[s.summaryCell, { borderBottomWidth: 1, borderColor: colors.border }]}>
+                <Text style={s.summaryCellLabel}>Closing Stock</Text>
+                <Text style={[s.summaryCellValue, { color: '#E65100' }]}>{summary?.closing_stock ?? 0}</Text>
+                <Text style={s.summaryCellSub}>units at end</Text>
+              </View>
+              <View style={[s.summaryCell, { borderRightWidth: 1, borderColor: colors.border }]}>
+                <Text style={s.summaryCellLabel}>Sold Today</Text>
+                <Text style={[s.summaryCellValue, { color: '#C62828' }]}>{summary?.units_sold ?? 0}</Text>
+                <Text style={s.summaryCellSub}>units out</Text>
+              </View>
+              <View style={s.summaryCell}>
+                <Text style={s.summaryCellLabel}>Revenue</Text>
+                <Text style={[s.summaryCellValue, { color: '#2E7D32', fontSize: FontSize.md }]}>
+                  ₦{parseFloat(summary?.revenue ?? '0').toLocaleString()}
+                </Text>
+                <Text style={s.summaryCellSub}>from sales</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Action buttons — plain English */}
         <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>What do you want to record?</Text>
         <View style={s.actionGrid}>
@@ -321,5 +388,27 @@ const s = StyleSheet.create({
   },
   modalSaveBtn: {
     marginTop: 24, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center',
+  },
+  summaryCard: {
+    borderRadius: Radius.lg, borderWidth: 1, marginBottom: 16, overflow: 'hidden',
+  },
+  summaryNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+  },
+  summaryGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+  },
+  summaryCell: {
+    width: '50%', padding: 14, alignItems: 'center',
+  },
+  summaryCellLabel: {
+    fontSize: 10, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.4,
+  },
+  summaryCellValue: {
+    fontSize: 26, fontWeight: '900', marginTop: 4,
+  },
+  summaryCellSub: {
+    fontSize: 10, color: '#999', marginTop: 2,
   },
 });

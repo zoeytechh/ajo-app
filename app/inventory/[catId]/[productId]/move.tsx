@@ -83,6 +83,7 @@ export default function MoveScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-movements', prodIdNum] });
       qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-daily-summary', prodIdNum] });
       router.back();
     },
     onError: (err: any) => {

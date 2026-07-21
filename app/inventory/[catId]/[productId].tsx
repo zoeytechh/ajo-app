@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, Image,
   Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -36,6 +36,14 @@ export default function ProductDetailScreen() {
   const [summaryDate, setSummaryDate]   = useState(new Date().toISOString().slice(0, 10));
   const [openingModal, setOpeningModal] = useState(false);
   const [openingInput, setOpeningInput] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-movements', prodIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-daily-summary', prodIdNum] });
+    }, [catIdNum, prodIdNum]),
+  );
 
   const { data: products } = useQuery({
     queryKey: ['inventory-products', catIdNum],

@@ -399,46 +399,56 @@ export default function CategoryDetailScreen() {
             </Text>
           </View>
         ) : (
-          filteredProducts.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              onPress={() => router.push(`/inventory/${catId}/${p.id}` as any)}
-              style={[s.card, { backgroundColor: colors.surface, ...Shadow.card(colors.black) }]}
-              activeOpacity={0.82}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginTop: 2 }}>
-                    ₦{parseFloat(p.price).toLocaleString()} per unit
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <View style={[s.qtyBadge, { backgroundColor: stockColor(p.quantity) + '18' }]}>
-                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: stockColor(p.quantity) }}>
-                      {p.quantity}
+          <View style={[s.table, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Table header */}
+            <View style={[s.tableHeader, { backgroundColor: '#E65100' }]}>
+              <Text style={[s.thText, { flex: 1 }]}>Product</Text>
+              <Text style={[s.thText, { width: 80, textAlign: 'right' }]}>Price</Text>
+              <Text style={[s.thText, { width: 44, textAlign: 'center' }]}>Qty</Text>
+              <Text style={[s.thText, { width: 72, textAlign: 'center' }]}>Status</Text>
+            </View>
+
+            {filteredProducts.map((p, idx) => {
+              const color = stockColor(p.quantity);
+              const statusLabel = p.quantity === 0 ? 'Out' : p.quantity < 5 ? 'Low' : 'OK';
+              const isLast = idx === filteredProducts.length - 1;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => router.push(`/inventory/${catId}/${p.id}` as any)}
+                  activeOpacity={0.75}
+                  style={[
+                    s.tableRow,
+                    { borderBottomColor: colors.border, borderBottomWidth: isLast ? 0 : 1 },
+                    idx % 2 === 1 && { backgroundColor: colors.background },
+                  ]}
+                >
+                  <View style={{ flex: 1, paddingRight: 6 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }} numberOfLines={1}>
+                      {p.name}
                     </Text>
-                  </View>
-                  <Text style={{ fontSize: 10, color: stockColor(p.quantity), marginTop: 2, fontWeight: '600' }}>
-                    {p.quantity === 0 ? 'Out of stock' : p.quantity < 5 ? 'Low stock' : 'In stock'}
-                  </Text>
-                </View>
-              </View>
-              {Object.keys(p.custom_fields).length > 0 && (
-                <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {Object.entries(p.custom_fields).map(([k, v]) => (
-                    <View key={k} style={[s.cfChip, { backgroundColor: colors.background }]}>
-                      <Text style={{ fontSize: 10, color: colors.textSecondary }}>
-                        <Text style={{ fontWeight: '600' }}>{k}:</Text> {String(v)}
+                    {Object.keys(p.custom_fields).length > 0 && (
+                      <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }} numberOfLines={1}>
+                        {Object.entries(p.custom_fields).map(([k, v]) => `${k}: ${v}`).join(' · ')}
                       </Text>
+                    )}
+                  </View>
+                  <Text style={{ width: 80, fontSize: FontSize.xs, color: colors.textSecondary, textAlign: 'right', fontWeight: '600' }}>
+                    ₦{parseFloat(p.price).toLocaleString()}
+                  </Text>
+                  <Text style={{ width: 44, fontSize: FontSize.md, fontWeight: '800', color, textAlign: 'center' }}>
+                    {p.quantity}
+                  </Text>
+                  <View style={{ width: 72, alignItems: 'center' }}>
+                    <View style={[s.statusPill, { backgroundColor: color + '20' }]}>
+                      <View style={[s.statusDot, { backgroundColor: color }]} />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color }}>{statusLabel}</Text>
                     </View>
-                  ))}
-                </View>
-              )}
-            </TouchableOpacity>
-          ))
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
 
@@ -473,9 +483,12 @@ const s = StyleSheet.create({
   summaryLbl: { fontSize: FontSize.xs, color: '#BF360C', marginTop: 2 },
   summaryDivider: { width: 1, marginVertical: 4 },
   body: { padding: 20 },
-  card: { borderRadius: Radius.lg, padding: 16, marginBottom: 12 },
-  qtyBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.md },
-  cfChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.sm },
+  table: { borderRadius: Radius.lg, borderWidth: 1, overflow: 'hidden', marginBottom: 16 },
+  tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
+  thText: { fontSize: 11, fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.4 },
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 11 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 4 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
   fab: {
     position: 'absolute', bottom: 92, right: 24,
     width: 58, height: 58, borderRadius: 29,

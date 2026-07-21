@@ -11,6 +11,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import {
   getCategories, getProducts, deleteCategory, updateCategory,
+  type CustomFieldDef,
 } from '../../src/services/inventoryService';
 import { getCategoryEmoji, formatStock, stockColor } from '../../src/utils/inventoryHelpers';
 
@@ -25,6 +26,14 @@ export default function CategoryDetailScreen() {
   const [editName, setEditName]   = useState('');
   const [search, setSearch]       = useState('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low' | 'out'>('all');
+
+  // Custom fields modal state
+  const [fieldsModal, setFieldsModal]   = useState(false);
+  const [draftFields, setDraftFields]   = useState<CustomFieldDef[]>([]);
+  const [addingField, setAddingField]   = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState<CustomFieldDef['type']>('text');
+  const [newFieldReq, setNewFieldReq]   = useState(false);
 
   const { data: categories, isRefetching, refetch } = useQuery({
     queryKey: ['inventory-categories'],
@@ -61,6 +70,41 @@ export default function CategoryDetailScreen() {
     setEditName(cat?.name ?? '');
     setEditModal(true);
   };
+
+  const { mutate: saveFields, isPending: savingFields } = useMutation({
+    mutationFn: () => updateCategory(catIdNum, { custom_field_defs: draftFields }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-categories'] });
+      setFieldsModal(false);
+    },
+    onError: () => Alert.alert('Error', 'Could not save custom fields.'),
+  });
+
+  const openFields = () => {
+    setDraftFields(cat?.custom_field_defs ?? []);
+    setAddingField(false);
+    setNewFieldName('');
+    setNewFieldType('text');
+    setNewFieldReq(false);
+    setFieldsModal(true);
+  };
+
+  const addField = () => {
+    const label = newFieldName.trim();
+    if (!label) return;
+    const name = label.toLowerCase().replace(/\s+/g, '_');
+    if (draftFields.some(f => f.name === name)) {
+      return Alert.alert('Duplicate', 'A field with that name already exists.');
+    }
+    setDraftFields(prev => [...prev, { name, type: newFieldType, required: newFieldReq }]);
+    setNewFieldName('');
+    setNewFieldType('text');
+    setNewFieldReq(false);
+    setAddingField(false);
+  };
+
+  const removeField = (name: string) =>
+    setDraftFields(prev => prev.filter(f => f.name !== name));
 
   const confirmDelete = () => {
     Alert.alert(
@@ -99,6 +143,13 @@ export default function CategoryDetailScreen() {
         <Text style={{ fontSize: FontSize.md, fontWeight: '700', color: colors.textPrimary, marginLeft: 10, flex: 1 }} numberOfLines={1}>
           {cat?.name ?? 'Category'}
         </Text>
+        <TouchableOpacity
+          onPress={openFields}
+          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
+          style={{ marginRight: 14 }}
+        >
+          <Ionicons name="list-outline" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={openEdit}
           hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
@@ -142,6 +193,123 @@ export default function CategoryDetailScreen() {
               {savingCat
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Save</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Custom fields modal */}
+      <Modal visible={fieldsModal} transparent animationType="slide" onRequestClose={() => setFieldsModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setFieldsModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: colors.surface, maxHeight: '80%' }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Custom Fields</Text>
+            <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, marginBottom: 16 }}>
+              Extra info collected for every product in this category (e.g. Size, Colour).
+            </Text>
+
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {draftFields.length === 0 && !addingField && (
+                <Text style={{ color: colors.textTertiary, fontSize: FontSize.sm, textAlign: 'center', paddingVertical: 16 }}>
+                  No custom fields yet.
+                </Text>
+              )}
+              {draftFields.map(f => (
+                <View key={f.name} style={[s.fieldRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>
+                      {f.name.replace(/_/g, ' ')}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                      <View style={[s.typeBadge, { backgroundColor: '#E65100' + '18' }]}>
+                        <Text style={{ fontSize: 10, color: '#E65100', fontWeight: '600' }}>{f.type}</Text>
+                      </View>
+                      {f.required && (
+                        <View style={[s.typeBadge, { backgroundColor: colors.error + '18' }]}>
+                          <Text style={{ fontSize: 10, color: colors.error, fontWeight: '600' }}>required</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => removeField(f.name)} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {addingField && (
+                <View style={[s.fieldRow, { backgroundColor: colors.background, borderColor: '#E65100', flexDirection: 'column', gap: 10 }]}>
+                  <TextInput
+                    value={newFieldName}
+                    onChangeText={setNewFieldName}
+                    placeholder="Field name (e.g. Size, Colour)"
+                    placeholderTextColor={colors.textTertiary}
+                    style={[s.modalInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+                    autoFocus
+                  />
+                  <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary, fontWeight: '600' }}>TYPE</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['text', 'number', 'date'] as const).map(t => (
+                      <TouchableOpacity
+                        key={t}
+                        onPress={() => setNewFieldType(t)}
+                        style={[s.typeBadge, {
+                          paddingHorizontal: 14, paddingVertical: 7,
+                          backgroundColor: newFieldType === t ? '#E65100' : colors.background,
+                          borderWidth: 1, borderColor: newFieldType === t ? '#E65100' : colors.border,
+                        }]}
+                      >
+                        <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: newFieldType === t ? '#fff' : colors.textSecondary }}>
+                          {t}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setNewFieldReq(r => !r)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  >
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 4, borderWidth: 1.5,
+                      borderColor: newFieldReq ? '#E65100' : colors.border,
+                      backgroundColor: newFieldReq ? '#E65100' : 'transparent',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {newFieldReq && <Ionicons name="checkmark" size={13} color="#fff" />}
+                    </View>
+                    <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>Required</Text>
+                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity onPress={() => setAddingField(false)} style={[s.modalSaveBtn, { flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }]}>
+                      <Text style={{ fontWeight: '700', color: colors.textSecondary }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={addField} disabled={!newFieldName.trim()} style={[s.modalSaveBtn, { flex: 1, backgroundColor: '#E65100', opacity: newFieldName.trim() ? 1 : 0.4 }]}>
+                      <Text style={{ fontWeight: '700', color: '#fff' }}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            {!addingField && (
+              <TouchableOpacity
+                onPress={() => setAddingField(true)}
+                style={[s.modalSaveBtn, { backgroundColor: colors.background, borderWidth: 1, borderColor: '#E65100', marginTop: 12 }]}
+              >
+                <Ionicons name="add" size={18} color="#E65100" />
+                <Text style={{ fontWeight: '700', color: '#E65100', marginLeft: 6 }}>Add a field</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => saveFields()}
+              disabled={savingFields}
+              style={[s.modalSaveBtn, { backgroundColor: '#E65100', marginTop: 10, opacity: savingFields ? 0.6 : 1 }]}
+            >
+              {savingFields
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Save fields</Text>
               }
             </TouchableOpacity>
           </View>
@@ -326,6 +494,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5,
     borderRadius: 20, borderWidth: 1,
   },
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: Radius.md,
+    padding: 12, marginBottom: 10,
+  },
+  typeBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   modalSheet: {
     paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40,

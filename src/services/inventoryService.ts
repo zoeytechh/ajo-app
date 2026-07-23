@@ -180,11 +180,11 @@ export const recordSale = (data: {
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
-export type ExpenseCategory = 'rent' | 'transport' | 'supplies' | 'salary' | 'utility' | 'other';
+export type ExpenseCategory = string;
 
 export interface InventoryExpense {
   id: number;
-  category: ExpenseCategory;
+  category: string;
   category_label: string;
   description: string;
   amount: string;
@@ -192,7 +192,7 @@ export interface InventoryExpense {
   created_at: string;
 }
 
-export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
+export const PRESET_EXPENSE_CATEGORIES: { value: string; label: string }[] = [
   { value: 'rent',      label: 'Rent' },
   { value: 'transport', label: 'Transport' },
   { value: 'supplies',  label: 'Supplies' },
@@ -201,11 +201,13 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
   { value: 'other',     label: 'Other' },
 ];
 
+export const EXPENSE_CATEGORIES = PRESET_EXPENSE_CATEGORIES;
+
 export const getExpenses = (): Promise<InventoryExpense[]> =>
   api.get('/api/inventory/expenses/').then(r => r.data);
 
 export const createExpense = (data: {
-  category: ExpenseCategory;
+  category: string;
   description?: string;
   amount: number;
   spent_at: string;
@@ -213,12 +215,29 @@ export const createExpense = (data: {
   api.post('/api/inventory/expenses/', data).then(r => r.data);
 
 export const updateExpense = (id: number, data: Partial<{
-  category: ExpenseCategory; description: string; amount: number; spent_at: string;
+  category: string; description: string; amount: number; spent_at: string;
 }>): Promise<InventoryExpense> =>
   api.patch(`/api/inventory/expenses/${id}/`, data).then(r => r.data);
 
 export const deleteExpense = (id: number): Promise<void> =>
   api.delete(`/api/inventory/expenses/${id}/`).then(() => undefined);
+
+// ─── User-defined expense categories ─────────────────────────────────────────
+
+export interface UserExpenseCategory {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export const getUserExpenseCategories = (): Promise<UserExpenseCategory[]> =>
+  api.get('/api/inventory/expense-categories/').then(r => r.data);
+
+export const saveUserExpenseCategory = (name: string): Promise<UserExpenseCategory> =>
+  api.post('/api/inventory/expense-categories/', { name }).then(r => r.data);
+
+export const deleteUserExpenseCategory = (id: number): Promise<void> =>
+  api.delete(`/api/inventory/expense-categories/${id}/`).then(() => undefined);
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 

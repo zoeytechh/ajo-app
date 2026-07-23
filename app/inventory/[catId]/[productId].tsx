@@ -12,7 +12,8 @@ import { FontSize, Radius, Shadow } from '../../../src/theme';
 import {
   getProducts, getMovements, deleteProduct, updateProduct,
   getProductDailySummary, closeStock, setOpeningStock,
-  type InventoryMovement,
+  getCustomers, recordSale,
+  type InventoryMovement, type InventoryCustomer, type CreateSaleItemPayload,
 } from '../../../src/services/inventoryService';
 import { formatStock, stockColor } from '../../../src/utils/inventoryHelpers';
 
@@ -36,6 +37,12 @@ export default function ProductDetailScreen() {
   const [summaryDate, setSummaryDate]   = useState(new Date().toISOString().slice(0, 10));
   const [openingModal, setOpeningModal] = useState(false);
   const [openingInput, setOpeningInput] = useState('');
+
+  const [saleModal, setSaleModal]             = useState(false);
+  const [saleQty, setSaleQty]                 = useState('1');
+  const [salePrice, setSalePrice]             = useState('');
+  const [saleCustomer, setSaleCustomer]       = useState<InventoryCustomer | null>(null);
+  const [custPickerModal, setCustPickerModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +69,11 @@ export default function ProductDetailScreen() {
     queryKey: ['inventory-daily-summary', prodIdNum, summaryDate],
     queryFn: () => getProductDailySummary(prodIdNum, summaryDate),
     enabled: !!prodIdNum,
+  });
+
+  const { data: customers } = useQuery({
+    queryKey: ['inventory-customers'],
+    queryFn: getCustomers,
   });
 
   const isRefreshing = (productsFetching || summaryFetching || movFetching) && !!products;
@@ -116,6 +128,27 @@ export default function ProductDetailScreen() {
       setOpeningModal(false);
     },
     onError: () => Alert.alert('Error', 'Could not update opening stock.'),
+  });
+
+  const { mutate: doRecordSale, isPending: recordingSale } = useMutation({
+    mutationFn: () => {
+      const qty   = parseInt(saleQty, 10) || 1;
+      const price = parseFloat(salePrice) || parseFloat(product?.effective_price ?? product?.price ?? '0');
+      const items: CreateSaleItemPayload[] = [{ product_id: prodIdNum, quantity: qty, unit_price: price }];
+      return recordSale({ customer_id: saleCustomer?.id ?? null, notes: '', items });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-movements', prodIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-daily-summary', prodIdNum] });
+      qc.invalidateQueries({ queryKey: ['inventory-sales'] });
+      qc.invalidateQueries({ queryKey: ['inventory-dashboard'] });
+      setSaleModal(false);
+      setSaleQty('1');
+      setSaleCustomer(null);
+      Alert.alert('Sale recorded', 'Revenue and stock have been updated.');
+    },
+    onError: (e: any) => Alert.alert('Error', e?.response?.data?.items ?? 'Could not record sale.'),
   });
 
   const openEdit = () => {
@@ -233,6 +266,123 @@ export default function ProductDetailScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Quick-sale modal */}
+      <Modal visible={saleModal} transparent animationType="slide" onRequestClose={() => setSaleModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setSaleModal(false)} />
+          <View style={[s.modalSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>I made a sale</Text>
+            <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: 16 }}>
+              {product?.name}
+            </Text>
+
+            <Text style={[s.modalLabel, { color: colors.textSecondary }]}>Customer (optional)</Text>
+            <TouchableOpacity
+              onPress={() => setCustPickerModal(true)}
+              style={[s.modalInput, { backgroundColor: colors.background, borderColor: colors.border,
+                flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }]}
+            >
+              <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
+              <Text style={{ flex: 1, marginLeft: 8, fontSize: FontSize.sm,
+                color: saleCustomer ? colors.textPrimary : colors.textTertiary }}>
+                {saleCustomer ? saleCustomer.name : 'Walk-in customer'}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={colors.textTertiary} />
+            </TouchableOpacity>
+
+            <Text style={[s.modalLabel, { color: colors.textSecondary, marginTop: 14 }]}>Quantity sold</Text>
+            <TextInput
+              value={saleQty}
+              onChangeText={setSaleQty}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="1"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="number-pad"
+              autoFocus
+            />
+
+            <Text style={[s.modalLabel, { color: colors.textSecondary, marginTop: 14 }]}>Unit price (₦)</Text>
+            <TextInput
+              value={salePrice}
+              onChangeText={setSalePrice}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="0"
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="decimal-pad"
+            />
+
+            {!!saleQty && !!salePrice && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14, paddingHorizontal: 2 }}>
+                <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>Total</Text>
+                <Text style={{ fontSize: FontSize.md, fontWeight: '800', color: '#2E7D32' }}>
+                  ₦{((parseInt(saleQty, 10) || 0) * (parseFloat(salePrice) || 0)).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={() => {
+                const qty = parseInt(saleQty, 10) || 0;
+                if (qty <= 0) return Alert.alert('Invalid quantity', 'Enter a quantity greater than 0.');
+                if (qty > (product?.quantity ?? 0))
+                  return Alert.alert('Insufficient stock', `Only ${product?.quantity} units available.`);
+                doRecordSale();
+              }}
+              disabled={recordingSale || !saleQty.trim() || !salePrice.trim()}
+              style={[s.modalSaveBtn, { backgroundColor: '#C62828',
+                opacity: (recordingSale || !saleQty.trim() || !salePrice.trim()) ? 0.5 : 1 }]}
+            >
+              {recordingSale
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.md }}>Confirm Sale</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Customer picker (for quick-sale) */}
+      <Modal visible={custPickerModal} transparent animationType="slide" onRequestClose={() => setCustPickerModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={[s.modalSheet, { backgroundColor: colors.surface }]}>
+            <Text style={[s.modalTitle, { color: colors.textPrimary }]}>Select Customer</Text>
+            <TouchableOpacity
+              onPress={() => { setSaleCustomer(null); setCustPickerModal(false); }}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+                borderBottomWidth: 1, borderBottomColor: colors.border }}
+            >
+              <Ionicons name="walk-outline" size={18} color={colors.textSecondary} />
+              <Text style={{ marginLeft: 10, fontSize: FontSize.sm, color: colors.textSecondary }}>Walk-in customer</Text>
+            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: 260 }}>
+              {(customers ?? []).map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  onPress={() => { setSaleCustomer(c); setCustPickerModal(false); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14,
+                    borderBottomWidth: 1, borderBottomColor: colors.border }}
+                >
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFEBEE',
+                    alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#C62828', fontWeight: '700' }}>{c.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: colors.textPrimary }}>{c.name}</Text>
+                    {!!c.phone && <Text style={{ fontSize: FontSize.xs, color: colors.textSecondary }}>{c.phone}</Text>}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              onPress={() => setCustPickerModal(false)}
+              style={[s.modalSaveBtn, { backgroundColor: colors.background, marginTop: 8 }]}
+            >
+              <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: FontSize.sm }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <ScrollView contentContainerStyle={[s.body, { paddingBottom: 60 }]} showsVerticalScrollIndicator={false}>
@@ -404,13 +554,16 @@ export default function ProductDetailScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push(`/inventory/${catId}/${productId}/move?type=out` as any)}
+            onPress={() => {
+              setSalePrice(product?.effective_price ?? product?.price ?? '');
+              setSaleModal(true);
+            }}
             style={[s.actionCard, { backgroundColor: '#FFEBEE' }]}
             activeOpacity={0.82}
           >
             <Ionicons name="cash-outline" size={32} color="#C62828" />
             <Text style={[s.actionTitle, { color: '#C62828' }]}>I made a sale</Text>
-            <Text style={[s.actionSub, { color: '#E53935' }]}>Remove sold items</Text>
+            <Text style={[s.actionSub, { color: '#E53935' }]}>Records revenue + deducts stock</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

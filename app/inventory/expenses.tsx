@@ -28,56 +28,191 @@ const PRESET_META: Record<string, { icon: string; color: string; bg: string }> =
   other:     { icon: 'receipt-outline', color: '#546E7A', bg: '#ECEFF1' },
 };
 
-// Keyword table — first match wins; keywords are checked against lower-cased name
+// Keyword table — first match wins; checked against lower-cased category name
 const KEYWORD_META: [string[], { icon: string; color: string; bg: string }][] = [
-  [['food','meal','lunch','dinner','breakfast','eat','canteen','rice','snack','suya','pepper','stew','vegetable'],
+  // Food & drinks
+  [['food','meal','lunch','dinner','breakfast','eat','canteen','rice','snack','suya','pepper',
+    'stew','vegetable','fruit','bread','agege','eba','amala','tuwo','egusi','ogbono','banga',
+    'indomie','noodle','sandwich','cake','pastry','drink','juice','water sachet','pure water'],
     { icon: 'restaurant-outline',       color: '#D84315', bg: '#FBE9E7' }],
-  [['fuel','petrol','diesel','generator','kerosene','gas','tank'],
+
+  // Fuel & power generation
+  [['fuel','petrol','diesel','generator','kerosene','gas','tank','filling station','pump'],
     { icon: 'flame-outline',            color: '#BF360C', bg: '#FBE9E7' }],
-  [['school','tuition','education','lesson','training','course','book','uniform'],
+
+  // Electricity (separate from generator fuel)
+  [['electricity','nepa','phcn','disco','prepaid','token','light bill','power bill','ekedc',
+    'ikedc','aedc','bedc','jedc','kedco','units'],
+    { icon: 'flash-outline',            color: '#F57F17', bg: '#FFFDE7' }],
+
+  // Education
+  [['school','tuition','education','lesson','training','course','book','textbook','uniform',
+    'exam','result','registration','school fee','lecture','class','workshop','seminar','certificate'],
     { icon: 'school-outline',           color: '#1A237E', bg: '#E8EAF6' }],
-  [['medical','health','hospital','doctor','clinic','pharmacy','drug','medicine','lab'],
+
+  // Health & medical
+  [['medical','health','hospital','doctor','clinic','pharmacy','drug','medicine','lab',
+    'test','injection','drip','scan','xray','x-ray','treatment','checkup','dentist','optician',
+    'maternity','surgery','prescription','malaria','covid'],
     { icon: 'medical-outline',          color: '#880E4F', bg: '#FCE4EC' }],
-  [['airtime','recharge','data','mtn','glo','airtel','9mobile','sim'],
+
+  // Airtime & mobile data
+  [['airtime','recharge','data','mtn','glo','airtel','9mobile','sim','credit','gsm','recharge card'],
     { icon: 'phone-portrait-outline',   color: '#1B5E20', bg: '#E8F5E9' }],
-  [['phone','mobile','handset'],
+
+  // Phone / gadget purchase
+  [['phone','mobile','handset','gadget','charger','earphone','headset','laptop','tablet','iphone','android'],
     { icon: 'call-outline',             color: '#1565C0', bg: '#E3F2FD' }],
-  [['internet','wifi','broadband','starlink','spectranet'],
+
+  // Internet & broadband
+  [['internet','wifi','broadband','starlink','spectranet','smile','swift','cybercafe','hotspot','router'],
     { icon: 'wifi-outline',             color: '#0D47A1', bg: '#E3F2FD' }],
-  [['repair','maintenance','fix','mechanic','plumber','carpenter','welder'],
+
+  // Repairs & maintenance
+  [['repair','maintenance','fix','mechanic','plumber','carpenter','welder','electrician',
+    'technician','artisan','painter','tiler','roofer','servic'],
     { icon: 'construct-outline',        color: '#E65100', bg: '#FFF3E0' }],
-  [['water','sachet','borehole','tap','well'],
+
+  // Water supply
+  [['water','sachet','borehole','tap','well','water tanker','water bill'],
     { icon: 'water-outline',            color: '#0277BD', bg: '#E1F5FE' }],
-  [['security','guard','cctv','alarm','watchman','gateman'],
+
+  // Security
+  [['security','guard','cctv','alarm','watchman','gateman','bouncer','surveillance','police'],
     { icon: 'shield-outline',           color: '#37474F', bg: '#ECEFF1' }],
-  [['advert','advertising','marketing','flyer','promo','banner','social media','print'],
+
+  // Advertising & marketing
+  [['advert','advertising','marketing','flyer','promo','banner','social media','promotion',
+    'campaign','jingle','radio','tv ad','google ad','influencer','design','branding'],
     { icon: 'megaphone-outline',        color: '#6A1B9A', bg: '#F3E5F5' }],
-  [['travel','trip','hotel','ticket','flight','bus','uber','taxi','okada','ride'],
+
+  // Travel & transport
+  [['travel','trip','hotel','ticket','flight','bus','uber','bolt','taxi','okada','keke',
+    'danfo','bike','ride','lodging','accommodation','airfare','interstate','journey'],
     { icon: 'airplane-outline',         color: '#004D40', bg: '#E0F2F1' }],
-  [['clean','wash','laundry','hygiene','sweep','mop'],
+
+  // Vehicle & car expenses
+  [['vehicle','car','truck','van','tyre','engine oil','car wash','parking','toll','garage',
+    'license','insurance car','road worthiness','plate number'],
+    { icon: 'car-outline',              color: '#6A1B9A', bg: '#F3E5F5' }],
+
+  // Cleaning & hygiene
+  [['clean','washing','laundry','hygiene','sweep','mop','detergent','soap','disinfect','bleach','sanitize'],
     { icon: 'sparkles-outline',         color: '#558B2F', bg: '#F1F8E9' }],
-  [['entertain','event','party','show','cinema','outing','fun'],
+
+  // Entertainment & events
+  [['entertain','event','party','show','cinema','outing','fun','concert','clubbing','gaming',
+    'streaming','netflix','dstv','gotv','startimes','cable'],
     { icon: 'musical-notes-outline',    color: '#AD1457', bg: '#FCE4EC' }],
-  [['insurance','premium','policy','cover'],
+
+  // Insurance
+  [['insurance','premium','policy','cover','assurance','nhis','hmo','health plan'],
     { icon: 'shield-checkmark-outline', color: '#4527A0', bg: '#EDE7F6' }],
-  [['tax','levy','government','council','firs','vat','lga'],
+
+  // Tax, government & levies
+  [['tax','levy','government','council','firs','vat','lga','tithe','union','association',
+    'dues','cess','stamp duty','cac','business permit','nafdac','son','regulatory'],
     { icon: 'document-text-outline',    color: '#37474F', bg: '#ECEFF1' }],
-  [['stationery','paper','pen','ink','printer','office supply'],
+
+  // Stationery & office supplies
+  [['stationery','paper','pen','ink','toner','printer','office supply','photocopy','laminate',
+    'folder','file','stamp','envelope','staple'],
     { icon: 'create-outline',           color: '#1565C0', bg: '#E3F2FD' }],
-  [['bag','pack','carton','wrap','nylon','container'],
+
+  // Packaging & bags
+  [['bag','pack','carton','wrap','nylon','container','sachet','label','seal','cellophane'],
     { icon: 'bag-outline',              color: '#4E342E', bg: '#EFEBE9' }],
-  [['loan','repay','debt','borrow','credit','interest'],
+
+  // Loan repayment & debt
+  [['loan','repay','debt','borrow','credit','interest','microfinance','bank repay','overdraft'],
     { icon: 'cash-outline',             color: '#2E7D32', bg: '#E8F5E9' }],
-  [['gift','donate','charity','tithe','offering','church','mosque'],
+
+  // Gift, donation & religious giving
+  [['gift','donate','charity','tithe','offering','church','mosque','fellowship','welfare',
+    'alms','zakat','contribution','levies'],
     { icon: 'heart-outline',            color: '#C62828', bg: '#FFEBEE' }],
-  [['storage','warehouse'],
+
+  // Warehouse & storage
+  [['storage','warehouse','store','depot','cold room','freezer space'],
     { icon: 'business-outline',         color: '#1565C0', bg: '#E3F2FD' }],
-  [['equipment','machine','tool','device'],
+
+  // Equipment & machinery
+  [['equipment','machine','tool','device','generator purchase','fridge','freezer','ac',
+    'fan','blender','cooker','oven','mixer','sewing machine','press'],
     { icon: 'hardware-chip-outline',    color: '#546E7A', bg: '#ECEFF1' }],
-  [['delivery','courier','dispatch','ship','logistics'],
+
+  // Delivery & logistics
+  [['delivery','courier','dispatch','ship','logistics','dispatch rider','gig','send','cargo','freight'],
     { icon: 'bicycle-outline',          color: '#00695C', bg: '#E0F2F1' }],
-  [['subscription','dues','membership','fee'],
+
+  // Subscription & membership
+  [['subscription','dues','membership','annual fee','renewal','platform','saas','software'],
     { icon: 'card-outline',             color: '#283593', bg: '#E8EAF6' }],
+
+  // Clothing & fashion
+  [['clothing','cloth','fabric','material','fashion','sew','tailor','uniform','shoe','bag','wear',
+    'dress','shirt','trouser','ankara','lace','aso ebi'],
+    { icon: 'shirt-outline',            color: '#AD1457', bg: '#FCE4EC' }],
+
+  // Baby & children
+  [['baby','child','infant','kid','diaper','pampers','formula','milk','toy','creche','daycare'],
+    { icon: 'happy-outline',            color: '#F57F17', bg: '#FFFDE7' }],
+
+  // Beauty & personal care
+  [['salon','barber','hair','makeup','nails','beauty','spa','cosmetic','weave','wig','braid',
+    'perm','relaxer','cream','lotion','perfume','deodorant'],
+    { icon: 'color-palette-outline',    color: '#880E4F', bg: '#FCE4EC' }],
+
+  // Livestock & agriculture
+  [['farm','seed','fertilizer','crop','harvest','livestock','chicken','goat','cow','pig',
+    'fish','poultry','agric','feed','pesticide','herbicide','land','plantation'],
+    { icon: 'leaf-outline',             color: '#2E7D32', bg: '#E8F5E9' }],
+
+  // Legal & professional services
+  [['legal','lawyer','attorney','court','notary','affidavit','agreement','contract',
+    'accounting','audit','consultant','professional','survey','valuation'],
+    { icon: 'briefcase-outline',        color: '#37474F', bg: '#ECEFF1' }],
+
+  // Building & construction
+  [['build','construction','block','cement','sand','iron rod','roofing','tile','paint',
+    'concrete','renovation','foundation','fence','gate','door','window'],
+    { icon: 'home-outline',             color: '#5D4037', bg: '#EFEBE9' }],
+
+  // Furniture & fittings
+  [['furniture','chair','table','desk','shelf','wardrobe','bed','sofa','cabinet','rack','fitting'],
+    { icon: 'bed-outline',              color: '#4E342E', bg: '#EFEBE9' }],
+
+  // Printing & media production
+  [['printing','photocopy','laminate','banner print','brochure','catalogue','poster','id card'],
+    { icon: 'print-outline',            color: '#1565C0', bg: '#E3F2FD' }],
+
+  // Staff bonus & welfare (beyond salary)
+  [['bonus','allowance','welfare','staff welfare','gratuity','incentive','reward','overtime'],
+    { icon: 'ribbon-outline',           color: '#2E7D32', bg: '#E8F5E9' }],
+
+  // Safety & protective gear
+  [['safety','ppe','protective','glove','mask','helmet','boot','overall','reflective','fire extinguisher'],
+    { icon: 'medkit-outline',           color: '#BF360C', bg: '#FBE9E7' }],
+
+  // Parking & toll
+  [['parking','toll','gate fee','express','bridge','access'],
+    { icon: 'navigate-outline',         color: '#546E7A', bg: '#ECEFF1' }],
+
+  // Sport & fitness
+  [['sport','gym','exercise','fitness','football','jersey','boot sport','court','swimming'],
+    { icon: 'fitness-outline',          color: '#1B5E20', bg: '#E8F5E9' }],
+
+  // Cooling & air conditioning
+  [['ac','air condition','cooling','fan','ventilation','aircon'],
+    { icon: 'thermometer-outline',      color: '#0277BD', bg: '#E1F5FE' }],
+
+  // Commission & agent fees
+  [['commission','agent','broker','referral','finder','introductory fee','percentage'],
+    { icon: 'people-circle-outline',    color: '#E65100', bg: '#FFF3E0' }],
+
+  // Miscellaneous / sundry
+  [['miscellaneous','sundry','various','petty cash','miscellany','general','random','other expense'],
+    { icon: 'grid-outline',             color: '#546E7A', bg: '#ECEFF1' }],
 ];
 
 const FALLBACK_META = { icon: 'pricetag-outline', color: '#00838F', bg: '#E0F7FA' };

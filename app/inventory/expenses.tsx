@@ -27,8 +27,70 @@ const PRESET_META: Record<string, { icon: string; color: string; bg: string }> =
   utility:   { icon: 'flash',           color: '#F57F17', bg: '#FFFDE7' },
   other:     { icon: 'receipt-outline', color: '#546E7A', bg: '#ECEFF1' },
 };
-const CUSTOM_META = { icon: 'pricetag-outline' as const, color: '#00838F', bg: '#E0F7FA' };
-const getCatMeta = (cat: string) => PRESET_META[cat] ?? CUSTOM_META;
+
+// Keyword table — first match wins; keywords are checked against lower-cased name
+const KEYWORD_META: [string[], { icon: string; color: string; bg: string }][] = [
+  [['food','meal','lunch','dinner','breakfast','eat','canteen','rice','snack','suya','pepper','stew','vegetable'],
+    { icon: 'restaurant-outline',       color: '#D84315', bg: '#FBE9E7' }],
+  [['fuel','petrol','diesel','generator','kerosene','gas','tank'],
+    { icon: 'flame-outline',            color: '#BF360C', bg: '#FBE9E7' }],
+  [['school','tuition','education','lesson','training','course','book','uniform'],
+    { icon: 'school-outline',           color: '#1A237E', bg: '#E8EAF6' }],
+  [['medical','health','hospital','doctor','clinic','pharmacy','drug','medicine','lab'],
+    { icon: 'medical-outline',          color: '#880E4F', bg: '#FCE4EC' }],
+  [['airtime','recharge','data','mtn','glo','airtel','9mobile','sim'],
+    { icon: 'phone-portrait-outline',   color: '#1B5E20', bg: '#E8F5E9' }],
+  [['phone','mobile','handset'],
+    { icon: 'call-outline',             color: '#1565C0', bg: '#E3F2FD' }],
+  [['internet','wifi','broadband','starlink','spectranet'],
+    { icon: 'wifi-outline',             color: '#0D47A1', bg: '#E3F2FD' }],
+  [['repair','maintenance','fix','mechanic','plumber','carpenter','welder'],
+    { icon: 'construct-outline',        color: '#E65100', bg: '#FFF3E0' }],
+  [['water','sachet','borehole','tap','well'],
+    { icon: 'water-outline',            color: '#0277BD', bg: '#E1F5FE' }],
+  [['security','guard','cctv','alarm','watchman','gateman'],
+    { icon: 'shield-outline',           color: '#37474F', bg: '#ECEFF1' }],
+  [['advert','advertising','marketing','flyer','promo','banner','social media','print'],
+    { icon: 'megaphone-outline',        color: '#6A1B9A', bg: '#F3E5F5' }],
+  [['travel','trip','hotel','ticket','flight','bus','uber','taxi','okada','ride'],
+    { icon: 'airplane-outline',         color: '#004D40', bg: '#E0F2F1' }],
+  [['clean','wash','laundry','hygiene','sweep','mop'],
+    { icon: 'sparkles-outline',         color: '#558B2F', bg: '#F1F8E9' }],
+  [['entertain','event','party','show','cinema','outing','fun'],
+    { icon: 'musical-notes-outline',    color: '#AD1457', bg: '#FCE4EC' }],
+  [['insurance','premium','policy','cover'],
+    { icon: 'shield-checkmark-outline', color: '#4527A0', bg: '#EDE7F6' }],
+  [['tax','levy','government','council','firs','vat','lga'],
+    { icon: 'document-text-outline',    color: '#37474F', bg: '#ECEFF1' }],
+  [['stationery','paper','pen','ink','printer','office supply'],
+    { icon: 'create-outline',           color: '#1565C0', bg: '#E3F2FD' }],
+  [['bag','pack','carton','wrap','nylon','container'],
+    { icon: 'bag-outline',              color: '#4E342E', bg: '#EFEBE9' }],
+  [['loan','repay','debt','borrow','credit','interest'],
+    { icon: 'cash-outline',             color: '#2E7D32', bg: '#E8F5E9' }],
+  [['gift','donate','charity','tithe','offering','church','mosque'],
+    { icon: 'heart-outline',            color: '#C62828', bg: '#FFEBEE' }],
+  [['storage','warehouse'],
+    { icon: 'business-outline',         color: '#1565C0', bg: '#E3F2FD' }],
+  [['equipment','machine','tool','device'],
+    { icon: 'hardware-chip-outline',    color: '#546E7A', bg: '#ECEFF1' }],
+  [['delivery','courier','dispatch','ship','logistics'],
+    { icon: 'bicycle-outline',          color: '#00695C', bg: '#E0F2F1' }],
+  [['subscription','dues','membership','fee'],
+    { icon: 'card-outline',             color: '#283593', bg: '#E8EAF6' }],
+];
+
+const FALLBACK_META = { icon: 'pricetag-outline', color: '#00838F', bg: '#E0F7FA' };
+
+function smartCatMeta(name: string): { icon: string; color: string; bg: string } {
+  const n = name.toLowerCase();
+  for (const [keywords, meta] of KEYWORD_META) {
+    if (keywords.some(k => n.includes(k))) return meta;
+  }
+  return FALLBACK_META;
+}
+
+const getCatMeta = (cat: string) => PRESET_META[cat] ?? smartCatMeta(cat);
 
 type Period = 'all' | 'week' | 'month';
 
@@ -89,11 +151,12 @@ export default function ExpensesScreen() {
       spent_at: spentAt,
     }),
     onSuccess: (saved) => {
-      qc.invalidateQueries({ queryKey: ['inventory-expenses'] });
+      // Immediately insert the new expense into the cache — no waiting for a refetch
+      qc.setQueryData<InventoryExpense[]>(['inventory-expenses'], (old = []) => [saved, ...old]);
       qc.invalidateQueries({ queryKey: ['inventory-dashboard'] });
       setModal(false);
 
-      // If they typed a custom name under "Other" and it's not already saved, prompt
+      // Prompt to save custom category
       const customName = otherName.trim();
       const alreadySaved = userCats.some(c => c.name.toLowerCase() === customName.toLowerCase());
       if (customName && !alreadySaved) {
@@ -113,14 +176,20 @@ export default function ExpensesScreen() {
   // ── Add custom category ─────────────────────────────────────────────────────
   const { mutate: addCat } = useMutation({
     mutationFn: (name: string) => saveUserExpenseCategory(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['inventory-expense-categories'] }),
+    onSuccess: (newCat) => {
+      // Immediately add to cache so tile appears without waiting for refetch
+      qc.setQueryData<UserExpenseCategory[]>(['inventory-expense-categories'], (old = []) =>
+        [...old, newCat].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    },
+    onError: () => Alert.alert('Error', 'Could not save category.'),
   });
 
   // ── Delete expense ──────────────────────────────────────────────────────────
   const { mutate: del } = useMutation({
     mutationFn: (id: number) => deleteExpense(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory-expenses'] });
+    onSuccess: (_, id) => {
+      qc.setQueryData<InventoryExpense[]>(['inventory-expenses'], (old = []) => old.filter(e => e.id !== id));
       qc.invalidateQueries({ queryKey: ['inventory-dashboard'] });
     },
     onError: () => Alert.alert('Error', 'Could not delete.'),
@@ -129,7 +198,11 @@ export default function ExpensesScreen() {
   // ── Delete user category ────────────────────────────────────────────────────
   const { mutate: delCat } = useMutation({
     mutationFn: (id: number) => deleteUserExpenseCategory(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['inventory-expense-categories'] }),
+    onSuccess: (_, id) => {
+      qc.setQueryData<UserExpenseCategory[]>(['inventory-expense-categories'], (old = []) =>
+        old.filter(c => c.id !== id),
+      );
+    },
   });
 
   const handleSave = () => {

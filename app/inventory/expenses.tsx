@@ -445,26 +445,33 @@ export default function ExpensesScreen() {
             {/* ── "Other" name input — only shown when Other is selected ── */}
             {isOther && (
               <View style={{ marginTop: 10, marginBottom: 4 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[s.label, { color: colors.textSecondary, marginBottom: 0 }]}>
-                    What is this expense? (optional)
-                  </Text>
-                  <Text style={{ fontSize: 11, color: otherName.length >= MAX_CAT_CHARS ? '#C62828' : colors.textTertiary }}>
-                    {otherName.length}/{MAX_CAT_CHARS}
-                  </Text>
-                </View>
+                <Text style={[s.label, { color: colors.textSecondary }]}>
+                  What is this expense? (optional)
+                </Text>
                 <TextInput
                   value={otherName}
                   onChangeText={(t) => setOtherName(t.slice(0, MAX_CAT_CHARS))}
                   placeholder="e.g. Generator Fuel, School Fees"
                   placeholderTextColor={colors.textTertiary}
                   style={[s.input, { backgroundColor: colors.background, borderColor: colors.border,
-                    color: colors.textPrimary }]}
+                    color: colors.textPrimary, marginBottom: 4 }]}
                   autoCapitalize="words"
+                  maxLength={MAX_CAT_CHARS}
                 />
-                <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>
-                  If you name it, we'll ask if you want to save it as a regular category.
-                </Text>
+                {/* Character countdown — shown right below the input */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, color: colors.textTertiary }}>
+                    If named, we'll ask to save it as a regular category.
+                  </Text>
+                  <Text style={{
+                    fontSize: 12, fontWeight: '700',
+                    color: otherName.length >= MAX_CAT_CHARS ? '#C62828'
+                      : otherName.length >= MAX_CAT_CHARS - 5 ? '#F57F17'
+                      : colors.textTertiary,
+                  }}>
+                    {MAX_CAT_CHARS - otherName.length} left
+                  </Text>
+                </View>
               </View>
             )}
 

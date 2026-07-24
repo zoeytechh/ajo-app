@@ -33,6 +33,7 @@ export default function AddProductScreen() {
   const [price, setPrice]           = useState('');
   const [quantity, setQuantity]     = useState('');
   const [discount, setDiscount]     = useState('');
+  const [barcode, setBarcode]       = useState('');
   const [imageUri, setImageUri]     = useState<string | null>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
 
@@ -56,6 +57,7 @@ export default function AddProductScreen() {
         price,
         quantity: parseInt(quantity, 10) || 0,
         discount_percent: discount ? parseFloat(discount) : 0,
+        barcode: barcode.trim() || undefined,
       } as any);
 
       // If image selected, upload it separately via PATCH
@@ -193,10 +195,27 @@ export default function AddProductScreen() {
           <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>pieces / units</Text>
         </View>
 
+        {/* Barcode */}
+        <Text style={[s.label, { color: colors.textSecondary, marginTop: 4 }]}>Barcode (optional)</Text>
+        <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginBottom: 10 }}>
+          Type or scan the barcode printed on the product so you can look it up later.
+        </Text>
+        <View style={[s.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="barcode-outline" size={18} color={colors.textTertiary} style={{ marginRight: 8 }} />
+          <TextInput
+            value={barcode}
+            onChangeText={setBarcode}
+            placeholder="e.g. 6001234567890"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary }}
+          />
+        </View>
+
         <TouchableOpacity
           onPress={handleSave}
           disabled={isPending}
-          style={[s.saveBtn, { backgroundColor: INV, marginTop: 28, opacity: isPending ? 0.6 : 1 }]}
+          style={[s.saveBtn, { backgroundColor: INV, marginTop: 16, opacity: isPending ? 0.6 : 1 }]}
           activeOpacity={0.85}
         >
           {isPending

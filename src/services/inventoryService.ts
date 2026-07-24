@@ -80,6 +80,7 @@ export const createProduct = (
     name: string;
     price: string | number;
     quantity?: number;
+    barcode?: string;
     custom_fields?: Record<string, string | number>;
   },
 ): Promise<InventoryProduct> =>

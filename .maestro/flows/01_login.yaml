@@ -1,0 +1,42 @@
+# E2E — Login flow
+# Verifies that a user can open the app, enter credentials, and reach the home screen.
+#
+# Usage:
+#   maestro test .maestro/flows/01_login.yaml
+#
+# Prerequisites:
+#   - A test account must exist: testuser@ajo.test / TestPass@123!
+#   - App bundle ID: com.ajo.app (adjust if different)
+
+appId: com.ajo.app
+---
+- launchApp:
+    clearState: true
+
+# Wait for the splash / onboarding to settle
+- waitForAnimationToEnd
+
+# Navigate to sign-in if there is a "Get Started" or "Sign In" landing button
+- tapOn:
+    text: "Sign In"
+    optional: true
+
+- assertVisible:
+    text: "Email"
+
+- tapOn:
+    text: "Email"
+- inputText: "testuser@ajo.test"
+
+- tapOn:
+    text: "Password"
+- inputText: "TestPass@123!"
+
+- tapOn:
+    text: "Log In"
+
+- waitForAnimationToEnd
+
+# After successful login the home / groups tab should be visible
+- assertVisible:
+    text: "Groups"

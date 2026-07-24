@@ -1,0 +1,61 @@
+# E2E — Submit a payment with a receipt photo
+# Verifies the full payment submission flow: open group → payment tab →
+# enter amount → take/upload receipt → confirm submission.
+#
+# Usage:
+#   maestro test .maestro/flows/03_submit_payment.yaml
+#
+# Prerequisites:
+#   - User is an approved member of "Test Savings Circle"
+#   - An active cycle exists for that group
+
+appId: com.ajo.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Go to Groups tab
+- tapOn:
+    text: "Groups"
+
+- waitForAnimationToEnd
+
+# Open the target group
+- tapOn:
+    text: "Test Savings Circle"
+
+- waitForAnimationToEnd
+
+# Switch to Payments tab
+- tapOn:
+    text: "Payments"
+
+- tapOn:
+    text: "Submit Payment"
+
+- assertVisible:
+    text: "Amount"
+
+- tapOn:
+    text: "Amount"
+- inputText: "5000"
+
+# Tap the receipt upload button
+- tapOn:
+    text: "Upload Receipt"
+
+# Dismiss the native media picker by selecting an existing photo (index 0)
+- tapOn:
+    index: 0
+
+- waitForAnimationToEnd
+
+# Submit the payment
+- tapOn:
+    text: "Submit"
+
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: "Pending"

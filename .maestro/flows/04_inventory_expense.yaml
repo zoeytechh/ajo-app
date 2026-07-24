@@ -1,0 +1,53 @@
+# E2E — Record an inventory expense
+# Verifies that a user can open the Inventory section, navigate to Expenses,
+# and log a new expense with an amount and category.
+#
+# Usage:
+#   maestro test .maestro/flows/04_inventory_expense.yaml
+
+appId: com.ajo.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Navigate to Inventory tab
+- tapOn:
+    text: "Inventory"
+
+- waitForAnimationToEnd
+
+# Open the Expenses sub-section
+- tapOn:
+    text: "Expenses"
+
+- tapOn:
+    text: "Add Expense"
+
+- assertVisible:
+    text: "Amount"
+
+- tapOn:
+    text: "Amount"
+- inputText: "2500"
+
+# Select a category from the list
+- tapOn:
+    text: "Category"
+- tapOn:
+    text: "Transport"
+
+# Optionally add a description
+- tapOn:
+    text: "Description"
+    optional: true
+- inputText: "Fuel for delivery"
+    optional: true
+
+- tapOn:
+    text: "Save"
+
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: "2,500"

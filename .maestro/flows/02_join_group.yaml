@@ -1,0 +1,51 @@
+# E2E — Join a group via invite link
+# Verifies that a user can search for a group and send a join request.
+#
+# Usage:
+#   maestro test .maestro/flows/02_join_group.yaml
+#
+# Prerequisites:
+#   - Logged-in session (run 01_login.yaml first or use a persistent app state)
+#   - At least one publicly listed test group exists with a known name
+
+appId: com.ajo.app
+---
+- launchApp
+
+- waitForAnimationToEnd
+
+# Navigate to Groups tab
+- tapOn:
+    text: "Groups"
+
+# Open group search / discovery
+- tapOn:
+    text: "Find a Group"
+    optional: true
+
+- assertVisible:
+    text: "Search"
+
+- tapOn:
+    text: "Search"
+- inputText: "Test Savings Circle"
+
+- waitForAnimationToEnd
+
+# Tap the first result
+- tapOn:
+    index: 0
+    text: "Test Savings Circle"
+
+- assertVisible:
+    text: "Join"
+
+- tapOn:
+    text: "Join"
+
+- waitForAnimationToEnd
+
+# Confirm the pending state message
+- assertVisible:
+    text: "Request sent"
+    optional: true

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Image, ScrollView,
+  Platform, Image, ScrollView, Modal,
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,28 @@ export default function AddProductScreen() {
   const [barcode, setBarcode]       = useState('');
   const [imageUri, setImageUri]     = useState<string | null>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanning, setScanning]     = useState(true);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  const openScanner = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Camera Permission', 'Enable camera access in Settings to scan barcodes.');
+        return;
+      }
+    }
+    setScanning(true);
+    setScannerVisible(true);
+  };
+
+  const handleScan = useCallback(({ data }: { data: string }) => {
+    if (!scanning) return;
+    setScanning(false);
+    setBarcode(data);
+    setScannerVisible(false);
+  }, [scanning]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -198,7 +221,7 @@ export default function AddProductScreen() {
         {/* Barcode */}
         <Text style={[s.label, { color: colors.textSecondary, marginTop: 4 }]}>Barcode (optional)</Text>
         <Text style={{ fontSize: FontSize.xs, color: colors.textTertiary, marginBottom: 10 }}>
-          Type or scan the barcode printed on the product so you can look it up later.
+          Scan or type the barcode on the product so you can look it up quickly during a sale.
         </Text>
         <View style={[s.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="barcode-outline" size={18} color={colors.textTertiary} style={{ marginRight: 8 }} />
@@ -210,7 +233,38 @@ export default function AddProductScreen() {
             autoCapitalize="none"
             style={{ flex: 1, fontSize: FontSize.sm, color: colors.textPrimary }}
           />
+          {barcode ? (
+            <TouchableOpacity onPress={() => setBarcode('')} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={openScanner} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+              <Ionicons name="camera-outline" size={20} color={INV} />
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* Barcode scanner modal */}
+        <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            {scanning && (
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'] }}
+                onBarcodeScanned={handleScan}
+              >
+                <View style={s.scanOverlay}>
+                  <TouchableOpacity onPress={() => setScannerVisible(false)} style={s.scanCloseBtn}>
+                    <Ionicons name="close" size={28} color="#fff" />
+                  </TouchableOpacity>
+                  <View style={s.scanFrame} />
+                  <Text style={s.scanHint}>Point at the barcode on the product</Text>
+                </View>
+              </CameraView>
+            )}
+          </View>
+        </Modal>
 
         <TouchableOpacity
           onPress={handleSave}
@@ -267,4 +321,17 @@ const s = StyleSheet.create({
     marginBottom: 20, overflow: 'hidden',
   },
   productImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  scanOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scanCloseBtn: {
+    position: 'absolute', top: 56, right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6,
+  },
+  scanFrame: {
+    width: 240, height: 160,
+    borderWidth: 2, borderColor: '#E65100', borderRadius: 12,
+  },
+  scanHint: {
+    color: '#fff', fontSize: 14, fontWeight: '600',
+    marginTop: 20, textAlign: 'center',
+  },
 });

@@ -34,6 +34,7 @@ export default function ProductDetailScreen() {
   const [editModal, setEditModal]       = useState(false);
   const [editName, setEditName]         = useState('');
   const [editPrice, setEditPrice]       = useState('');
+  const [editBarcode, setEditBarcode]   = useState('');
   const [summaryDate, setSummaryDate]   = useState(new Date().toISOString().slice(0, 10));
   const [openingModal, setOpeningModal] = useState(false);
   const [openingInput, setOpeningInput] = useState('');
@@ -104,6 +105,7 @@ export default function ProductDetailScreen() {
     mutationFn: () => updateProduct(prodIdNum, {
       name: editName.trim(),
       price: editPrice.trim(),
+      barcode: editBarcode.trim(),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory-products', catIdNum] });
@@ -154,6 +156,7 @@ export default function ProductDetailScreen() {
   const openEdit = () => {
     setEditName(product?.name ?? '');
     setEditPrice(product?.price ?? '');
+    setEditBarcode(product?.barcode ?? '');
     setEditModal(true);
   };
 
@@ -220,6 +223,15 @@ export default function ProductDetailScreen() {
               placeholder="e.g. 150"
               placeholderTextColor={colors.textTertiary}
               keyboardType="decimal-pad"
+            />
+            <Text style={[s.modalLabel, { color: colors.textSecondary, marginTop: 14 }]}>Barcode (optional)</Text>
+            <TextInput
+              value={editBarcode}
+              onChangeText={setEditBarcode}
+              style={[s.modalInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Scan or type barcode"
+              placeholderTextColor={colors.textTertiary}
+              autoCapitalize="none"
             />
             <TouchableOpacity
               onPress={() => saveEdit()}
@@ -435,6 +447,12 @@ export default function ProductDetailScreen() {
                 Stock value: ₦{stockValue.toLocaleString()}
               </Text>
             </View>
+            {!!product.barcode && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 }}>
+                <Ionicons name="barcode-outline" size={16} color="#BF360C" />
+                <Text style={{ fontSize: FontSize.xs, color: '#BF360C', fontFamily: 'monospace' }}>{product.barcode}</Text>
+              </View>
+            )}
           </View>
         )}
 

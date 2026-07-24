@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   TextInput, StyleSheet, Alert, ActivityIndicator, Modal,
@@ -6,10 +6,11 @@ import {
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '../../src/hooks/useTheme';
 import { FontSize, Radius, Shadow } from '../../src/theme';
 import {
-  getCategories, getProducts, getCustomers, recordSale,
+  getCategories, getProducts, getCustomers, recordSale, getProductByBarcode,
   type InventoryProduct, type InventoryCustomer, type CreateSaleItemPayload,
 } from '../../src/services/inventoryService';
 
@@ -26,6 +27,8 @@ export default function NewSaleScreen() {
   const router = useRouter();
   const qc = useQueryClient();
 
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
   const { data: categories } = useQuery({ queryKey: ['inventory-categories'], queryFn: getCategories });
   const { data: customers } = useQuery({ queryKey: ['inventory-customers'], queryFn: getCustomers });
 
@@ -37,6 +40,14 @@ export default function NewSaleScreen() {
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [qtyInput, setQtyInput] = useState<Record<number, string>>({});
   const [priceInput, setPriceInput] = useState<Record<number, string>>({});
+
+  // Barcode scanner state
+  const [scannerModal, setScannerModal] = useState(false);
+  const [scanning, setScanning] = useState(true);
+  const [scanLookupLoading, setScanLookupLoading] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<InventoryProduct | null>(null);
+  const [scanQty, setScanQty] = useState('1');
+  const [scanPrice, setScanPrice] = useState('');
 
   const { data: catProducts } = useQuery({
     queryKey: ['inventory-products', selectedCatId],
@@ -79,6 +90,26 @@ export default function NewSaleScreen() {
     setProductModal(false);
   };
 
+  const addScannedToCart = () => {
+    if (!scannedProduct) return;
+    const qty = parseInt(scanQty, 10) || 1;
+    const price = parseFloat(scanPrice) || parseFloat(scannedProduct.effective_price);
+    if (qty > scannedProduct.quantity) {
+      Alert.alert('Insufficient Stock', `Only ${scannedProduct.quantity} units available.`);
+      return;
+    }
+    setCart(prev => {
+      const existing = prev.findIndex(c => c.product.id === scannedProduct.id);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = { ...updated[existing], quantity: updated[existing].quantity + qty, unit_price: price };
+        return updated;
+      }
+      return [...prev, { product: scannedProduct, quantity: qty, unit_price: price }];
+    });
+    closeScannerModal();
+  };
+
   const removeFromCart = (productId: number) =>
     setCart(prev => prev.filter(c => c.product.id !== productId));
 
@@ -88,6 +119,45 @@ export default function NewSaleScreen() {
     if (cart.length === 0) return Alert.alert('Empty Cart', 'Add at least one item.');
     mutate();
   };
+
+  const openScannerModal = async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert('Camera Permission', 'Enable camera access in Settings to scan barcodes.');
+        return;
+      }
+    }
+    setScannedProduct(null);
+    setScanQty('1');
+    setScanPrice('');
+    setScanning(true);
+    setScannerModal(true);
+  };
+
+  const closeScannerModal = () => {
+    setScannerModal(false);
+    setScannedProduct(null);
+    setScanning(true);
+  };
+
+  const handleBarcodeScan = useCallback(async ({ data }: { data: string }) => {
+    if (!scanning || scanLookupLoading) return;
+    setScanning(false);
+    setScanLookupLoading(true);
+    try {
+      const product = await getProductByBarcode(data);
+      setScannedProduct(product);
+      setScanPrice(product.effective_price);
+    } catch {
+      Alert.alert('Not Found', `No product is linked to barcode "${data}".`, [
+        { text: 'Scan Again', onPress: () => setScanning(true) },
+        { text: 'Close', onPress: closeScannerModal },
+      ]);
+    } finally {
+      setScanLookupLoading(false);
+    }
+  }, [scanning, scanLookupLoading]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -115,16 +185,19 @@ export default function NewSaleScreen() {
           <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
         </TouchableOpacity>
 
-        {/* Cart */}
+        {/* Cart header with Add + Scan buttons */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 10 }}>
           <Text style={[s.sectionLabel, { color: colors.textPrimary, marginTop: 0 }]}>Items</Text>
-          <TouchableOpacity
-            onPress={() => setProductModal(true)}
-            style={[s.smallAddBtn, { backgroundColor: INV }]}
-          >
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.xs, marginLeft: 4 }}>Add Item</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={openScannerModal} style={[s.smallAddBtn, { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: INV }]}>
+              <Ionicons name="barcode-outline" size={16} color={INV} />
+              <Text style={{ color: INV, fontWeight: '700', fontSize: FontSize.xs, marginLeft: 4 }}>Scan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setProductModal(true)} style={[s.smallAddBtn, { backgroundColor: INV }]}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: FontSize.xs, marginLeft: 4 }}>Add Item</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {cart.length === 0 ? (
@@ -275,6 +348,94 @@ export default function NewSaleScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Barcode scanner modal */}
+      <Modal visible={scannerModal} animationType="slide" onRequestClose={closeScannerModal}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {/* Camera view */}
+          {scanning && (
+            <CameraView
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              barcodeScannerSettings={{
+                barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'],
+              }}
+              onBarcodeScanned={handleBarcodeScan}
+            >
+              {/* Scanner overlay */}
+              <View style={s.scanOverlay}>
+                <TouchableOpacity onPress={closeScannerModal} style={s.scanCloseBtn}>
+                  <Ionicons name="close" size={28} color="#fff" />
+                </TouchableOpacity>
+                <View style={s.scanFrame} />
+                <Text style={s.scanHint}>Point at a product barcode</Text>
+              </View>
+            </CameraView>
+          )}
+
+          {/* Lookup loading */}
+          {scanLookupLoading && (
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+              <ActivityIndicator size="large" color={INV} />
+              <Text style={{ color: '#fff', marginTop: 12, fontSize: FontSize.sm }}>Looking up product…</Text>
+            </View>
+          )}
+
+          {/* Scanned product card */}
+          {scannedProduct && !scanLookupLoading && (
+            <View style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]}>
+              <View style={[s.scannedCard, { backgroundColor: '#fff' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                  <View style={[s.scannedIcon, { backgroundColor: '#FFF3E0' }]}>
+                    <Ionicons name="barcode" size={22} color={INV} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontSize: FontSize.md, fontWeight: '800', color: '#111' }}>{scannedProduct.name}</Text>
+                    <Text style={{ fontSize: FontSize.xs, color: '#666', marginTop: 2 }}>
+                      Stock: {scannedProduct.quantity} · ₦{Number(scannedProduct.price).toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: FontSize.xs, color: '#666', marginBottom: 4 }}>Quantity</Text>
+                    <TextInput
+                      value={scanQty}
+                      onChangeText={setScanQty}
+                      keyboardType="numeric"
+                      style={[s.miniInput, { backgroundColor: '#F5F5F5', borderColor: '#DDD', color: '#111' }]}
+                    />
+                  </View>
+                  <View style={{ flex: 2 }}>
+                    <Text style={{ fontSize: FontSize.xs, color: '#666', marginBottom: 4 }}>Unit Price (₦)</Text>
+                    <TextInput
+                      value={scanPrice}
+                      onChangeText={setScanPrice}
+                      keyboardType="decimal-pad"
+                      style={[s.miniInput, { backgroundColor: '#F5F5F5', borderColor: '#DDD', color: '#111' }]}
+                    />
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => { setScannedProduct(null); setScanning(true); }}
+                    style={[s.scanActionBtn, { backgroundColor: '#F5F5F5', flex: 1 }]}
+                  >
+                    <Text style={{ fontWeight: '700', color: '#333', fontSize: FontSize.sm }}>Scan Again</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={addScannedToCart}
+                    style={[s.scanActionBtn, { backgroundColor: INV, flex: 2 }]}
+                  >
+                    <Ionicons name="cart" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={{ fontWeight: '800', color: '#fff', fontSize: FontSize.sm }}>Add to Cart</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -322,4 +483,27 @@ const s = StyleSheet.create({
     fontSize: FontSize.sm,
   },
   addItemBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  // Scanner styles
+  scanOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scanCloseBtn: {
+    position: 'absolute', top: 56, right: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 6,
+  },
+  scanFrame: {
+    width: 240, height: 160,
+    borderWidth: 2, borderColor: INV, borderRadius: 12,
+  },
+  scanHint: {
+    color: '#fff', fontSize: FontSize.sm, fontWeight: '600',
+    marginTop: 20, textAlign: 'center',
+  },
+  scannedCard: {
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 24, paddingBottom: 40,
+  },
+  scannedIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  scanActionBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: Radius.lg,
+  },
 });

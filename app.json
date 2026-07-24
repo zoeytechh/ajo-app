@@ -51,6 +51,13 @@
         {
           "microphonePermission": "Ajo needs microphone access to record voice notes when disputing a payment."
         }
+      ],
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ajo needs camera access to scan product barcodes."
+        }
       ]
     ],
     "extra": {

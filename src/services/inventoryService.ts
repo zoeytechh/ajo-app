@@ -28,10 +28,14 @@ export interface InventoryProduct {
   image: string | null;
   image_url: string | null;
   quantity: number;
+  barcode: string;
   custom_fields: Record<string, string | number>;
   created_at: string;
   updated_at: string;
 }
+
+export const getProductByBarcode = (code: string): Promise<InventoryProduct> =>
+  api.get(`/api/inventory/products/barcode/`, { params: { code } }).then(r => r.data);
 
 export type MovementType = 'in' | 'out' | 'adjustment';
 
@@ -83,7 +87,7 @@ export const createProduct = (
 
 export const updateProduct = (
   prodId: number,
-  data: Partial<{ name: string; price: string | number; custom_fields: Record<string, string | number> }>,
+  data: Partial<{ name: string; price: string | number; barcode: string; custom_fields: Record<string, string | number> }>,
 ): Promise<InventoryProduct> =>
   api.patch(`/api/inventory/products/${prodId}/`, data).then(r => r.data);
 
